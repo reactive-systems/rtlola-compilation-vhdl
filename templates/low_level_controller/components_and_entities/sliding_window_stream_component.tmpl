@@ -1,0 +1,14 @@
+    component {{name}}_sliding_window_entity
+	    port (
+		    clk, rst : in std_logic;
+		    evict, upd, request : in std_logic;
+            time_in : in unsigned(63 downto 0);
+            data_in : in {{in_ty}};
+            data_out : out {{sw_ret_ty}};
+            data_valid_out : out std_logic;
+            evict_done_out : out std_logic;
+            upd_done_out : out std_logic;
+            request_done_out : out std_logic
+	    );
+    end component;
+

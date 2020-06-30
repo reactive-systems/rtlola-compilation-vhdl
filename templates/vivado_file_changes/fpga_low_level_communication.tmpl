@@ -1,0 +1,89 @@
+#ifndef SRC_BIT_COM_H_
+#define SRC_BIT_COM_H_
+
+#include "xbasic_types.h"
+#include "xparameters.h"
+#include "macros.h"
+
+void set_bit_for_reg(Xuint32* reg, Xuint32 bit) {
+	*(reg) |= bit;
+}
+
+void unset_bit_for_reg(Xuint32* reg, Xuint32 bit) {
+	*(reg) &= ~bit;
+}
+
+Xuint32 get_bit_for_reg(Xuint32* reg, Xuint32 bit) {
+	Xuint32 value = *(reg) & bit;
+	Xuint32 pos = bit;
+	while (pos > 1) {
+		value >>=1;
+		pos >>=1;
+	}
+	return value;
+}
+
+Xuint32 get_reg(Xuint32* reg) {
+	return *(reg);
+}
+
+float get_reg_as_float16(Xuint32* reg) {
+    Xint32 val = get_reg(reg);
+    return ((float) val / (float) (1 << 11));
+}
+
+float get_reg_as_float32(Xuint32* reg) {
+    Xint32 val = get_reg(reg);
+    return ((float) val / (float) (1 << 23));
+}
+
+double get_regs_as_double(Xuint32* reg_low, Xuint32* reg_high) {
+    int64_t high = get_reg(reg_high);
+    int64_t low = get_reg(reg_low);
+    int64_t val = (high << 32) + low;
+
+    return ((double) val / (double) ((int64_t)1 << 52));
+}
+
+void set_input_bit_for_reg(Xuint32* reg, Xuint32 bit, Xuint32 value) {
+	value ? set_bit_for_reg(reg, bit) : unset_bit_for_reg(reg, bit);
+}
+
+void set_input_for_reg(Xuint32* reg, Xuint32 value) {
+	*(reg) = value;
+}
+
+void set_input_range_for_reg(Xuint32* reg, Xuint32 range, Xuint32 shift, Xuint32 value) {
+	*(reg) = (*(reg) & ~range) | (value << shift);
+}
+
+void set_signed_input_for_reg(Xuint32* reg, Xint32 rec) {
+	union {char b[sizeof(Xint32)]; Xint32 v;} int_ty;
+	int_ty.v = rec;
+	union {char b[sizeof(Xuint32)]; Xuint32 v;} uint_ty;
+	for(int i=0;i<sizeof(Xint32);i++) {
+		uint_ty.b[i] = int_ty.b[i];
+	}
+	set_input_for_reg(reg,uint_ty.v);
+}
+
+void set_float16_input_for_reg(Xuint32* reg, float rec) {
+    Xint32 val = (Xint32)( rec * (1 << 11));
+    set_input_for_reg(reg, val);
+}
+
+void set_float32_input_for_reg(Xuint32* reg, float rec) {
+    Xint32 val = (Xint32)( rec * (1 << 23));
+    set_input_for_reg(reg, val);
+}
+
+void set_double_input_for_reg(Xuint32* reg_low, Xuint32* reg_high, double rec) {
+    uint64_t val = rec * ((int64_t)1 << 52);
+    Xint32 low = (Xint32) (((uint64_t) val << 32) >> 32);
+    Xint32 high = (Xint32) (val >> 32);
+    set_input_for_reg(reg_low, low);
+    set_input_for_reg(reg_high, high);
+}
+
+
+#endif /* SRC_BIT_COM_H_ */

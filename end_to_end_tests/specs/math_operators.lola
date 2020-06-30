@@ -1,0 +1,16 @@
+import math
+
+input a : Int32
+input b : Int32
+
+output plus_op := a + b
+output minus_op := a - b
+output mult_op := a *b
+output div_op := a / b
+output mod_op := a % b
+//output pow_op := a**b
+output func_abs := abs(b)
+output func_sqrt : Int32 := cast(sqrt(cast(a)))
+
+output counter : Int32 @1Hz := counter.offset(by:-1).defaults(to: 0) + 1
+

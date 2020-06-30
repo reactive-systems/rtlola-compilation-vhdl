@@ -1,0 +1,23 @@
+input a : Bool
+input b : Bool
+input ID : Int8
+
+//compare operator
+output eq := (ID = 5)
+output lt := (ID < 5)
+output le := (ID <= 5)
+output gt := (ID > 5)
+output ge := (ID >= 5)
+output neq := lt || gt
+
+//bool operator
+output not_a := !a
+output a_and_b := a && b
+output a_or_b := a || b
+output a_impl_b := !a || b
+output a_equiv_b := a_impl_b && (!b || a)
+output a_xor_b := ! a_equiv_b
+
+output true_const := lt || gt || eq
+
+output time_stream @1Hz := ID.hold().defaults(to:0)

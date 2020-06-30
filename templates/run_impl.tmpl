@@ -1,0 +1,88 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity run_impl_wip is
+end entity run_impl_wip;
+
+architecture behaviour of run_impl_wip is
+
+    component implementation is
+        port(
+            clk, rst : in std_logic;
+            offline : in std_logic;
+            input_time : in std_logic_vector(63 downto 0);
+            new_input: in std_logic;{{input}}
+            time_stream : out std_logic_vector(63 downto 0);{{output}}
+            lost_data : out std_logic
+        );
+    end component;
+
+    signal clk : std_logic := '0';
+    signal rst : std_logic := '1';
+    signal time_data : std_logic_vector(63 downto 0) := (others => '0');
+    signal time_stream : std_logic_vector(63 downto 0);{{signals}}
+    signal new_input_in : std_logic := '0';
+    signal lost_data : std_logic := '0';
+
+    -- constants
+    signal const1 : std_logic := '1';
+
+    -- config signals
+    constant new_input_clock_cycle : natural := {{num_input_cycle}};
+    constant number_iterations : natural := 2*{{num_clock_cycles}};
+    constant number_inputs : natural := {{num_test_inputs}};
+
+    -- set inputs{{input_definition}}
+
+begin
+
+    implementation_instance: implementation
+        port map (
+            clk => clk,
+            rst => rst,
+            offline => const1,
+            input_time => time_data,
+            new_input => new_input_in,{{monitor_instantiation_input}}
+            time_stream => time_stream,{{monitor_instantiation_output}}
+            lost_data => lost_data
+        );
+
+    process
+
+    begin
+        -- reset to get initial values
+        rst <= '0';
+        wait for 1 ps;
+        -- set number of repetitions
+        for I in 1 to new_input_clock_cycle loop
+            clk <= '1';
+            wait for 1 ps;
+            clk <= '0';
+            wait for 1 ps;
+        end loop;
+        -- set number of repetitions
+        for I in 0 to 2*number_inputs loop
+            --set inputs for each iteration
+            if (I <= number_inputs) then{{set_inputs}}
+            end if;
+            for I_inner in 1 to number_iterations loop
+                clk <= '1';
+                wait for 1 ps;
+                clk <= '0';
+                wait for 1 ps;
+            end loop;
+            {{disable_inputs}}
+            for I_inner in 1 to 2*number_iterations loop
+                clk <= '1';
+                wait for 1 ps;
+                clk <= '0';
+                wait for 1 ps;
+            end loop;
+        end loop;
+        wait;
+    end process;
+
+end behaviour;

@@ -1,0 +1,8 @@
+input a : Int8
+input b : Int8
+output c := a + b + d.offset(by: -1).defaults(to:3)
+output d := b + e.offset(by:-2).defaults(to:4)
+output e := a.offset(by:-1).defaults(to:1) + c
+output f := a + a.offset(by: -1).defaults(to: 0)
+output g := b + f
+output time_stream @1Hz := a.hold().defaults(to:6)

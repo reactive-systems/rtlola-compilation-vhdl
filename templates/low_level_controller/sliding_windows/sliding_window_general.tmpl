@@ -1,0 +1,97 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+--* Sliding window in the specification:
+--* {{annotation}}
+--* Source Stream: {{source_stream}}
+--* Number of Buckets: {{bucket_length + 1}}
+--* Time per Bucket: {{time_per_bucket_in_seconds}}
+--* Input Type: {{input_type_annotation}}
+--* Return Type: {{return_type_annotation}}
+
+entity {{name}}_sliding_window_entity is
+    port (
+        clk, rst : in std_logic;
+        evict, upd, request : in std_logic;
+        time_in : in unsigned(63 downto 0);
+        data_in : in {{in_ty}};
+        data_out : out {{sw_ret_ty}};
+        data_valid_out : out std_logic;
+        evict_done_out : out std_logic;
+        upd_done_out : out std_logic;
+        request_done_out : out std_logic
+    );
+end {{name}}_sliding_window_entity;
+
+architecture behavioral of {{name}}_sliding_window_entity is
+
+    -- Internal Signal Declarations
+    signal last_ts_before_upd : unsigned(63 downto 0);
+    signal sw_data : {{sw_ret_ty}};
+    signal sw_data_valid : std_logic;
+    -- Done Signals
+    signal evict_done : std_logic;
+    signal upd_done : std_logic;
+    signal request_done : std_logic;
+    -- Buckets
+    signal ts_buckets : unsigned64_array({{bucket_length}} downto 0);
+    {{sw_data_buckets}}
+    signal data_valid_buckets : bit_array({{bucket_length}} downto 0);
+
+    begin
+
+    process (clk, rst) {{temporary_variables}}begin
+        if (rst='1') then
+            -- Reset Phase
+            evict_done <= '0';
+            upd_done <= '0';
+            request_done <= '0';
+            sw_data <= {{sw_zero_assignment}};
+            sw_data_valid <= {{valid_upd}};
+            last_ts_before_upd <= to_unsigned(0, last_ts_before_upd'length);
+            -- Reset Buckets
+            ts_buckets(ts_buckets'high downto 0) <= (others => (others => '0'));
+            data_valid_buckets(data_valid_buckets'high downto 0) <= (others => {{valid_upd}});
+            {{set_sw_buckets_to_default}}
+        elsif (rising_edge(clk)) then
+            -- Logic Phase
+            if (evict = '1' and evict_done = '0') then
+                -- Evict Case: New TimeStamp
+                if time_in > last_ts_before_upd then
+                    -- Update Timestamp
+                    last_ts_before_upd <= last_ts_before_upd + to_unsigned({{time_per_bucket}}, last_ts_before_upd'length);
+                    -- Create New Bucket and Shift Bucket Array
+                    ts_buckets <= ts_buckets(ts_buckets'high-1 downto 0) & (last_ts_before_upd + to_unsigned({{time_per_bucket}}, ts_buckets(0)'length));
+                    data_valid_buckets <= data_valid_buckets(data_valid_buckets'high-1 downto 0) & {{valid_upd}};
+                    {{create_and_shift_sw_buckets}}
+                else
+                    evict_done <= '1';
+                end if;
+            elsif (upd = '1' and upd_done = '0') then
+                -- Update Case: Map New Input and Update Last Buckets Entry
+                {{map_and_update_last_sw_bucket}}
+                upd_done <= '1';
+            elsif (request = '1' and request_done = '0') then
+                -- Request Case: Finalize Buckets
+                {{finalize_sw}}
+                sw_data_valid <= {{finalize_valid}};
+                request_done <= '1';
+            elsif (evict ='0' and upd = '0' and request = '0') then
+                evict_done <= '0';
+                upd_done <= '0';
+                request_done <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- Map Internal Signals to Output Wires
+    data_out <= sw_data;
+    data_valid_out <= sw_data_valid;
+    evict_done_out <= evict_done;
+    upd_done_out <= upd_done;
+    request_done_out <= request_done;
+
+end behavioral;

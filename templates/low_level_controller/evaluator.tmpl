@@ -1,0 +1,69 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity evaluator is
+    port (
+        clk, input_clk, rst : in std_logic;
+        input_time : in unsigned(63 downto 0);{{inputs}}{{outputs}}
+        done : out std_logic;
+        valid : out std_logic
+    );
+end evaluator;
+
+--* Specification:
+{{print_spec}}
+
+architecture mixed of evaluator is
+
+    -- Component Declaration
+{{component_declaration}}
+    -- Internal Signal Declarations
+{{signals}}
+    signal upd_and_pe_done : std_logic;
+    signal evaluator_done : std_logic;
+    signal valid_reg : std_logic;
+    signal rst_en_done : std_logic;
+
+begin
+    -- Component Instantiation
+{{component_instantiation}}
+    process(clk, rst) begin
+        if rst = '1' then
+            -- Reset Phase
+            valid_reg <= '0';{{disable_en_signals}}
+            upd_and_pe_done <= '1';
+            evaluator_done <= '1';
+            rst_en_done <= '0';
+        elsif rising_edge(clk) then
+            -- Logic Phase
+            if input_clk = '1' then
+                if upd_and_pe_done = '0' then
+                    -- Input Stream Updates
+                    --* Input Streams in Specification {{print_input_stream_names}}{{upd_signal_assignments}}
+                    -- Pseudo Evaluation Phase
+                    --* Output Streams in Specification {{print_output_stream_names}}{{pe_signal_assignments}}
+                    -- Evict Phase
+                    --* Sliding Windows in Specification {{print_sliding_windows}}{{evict_signal_assignments}}
+                    upd_and_pe_done <= '1';
+                    evaluator_done <= '0';
+                else
+                    -- Eval Phase{{eval_signal_assignments}}
+                    -- SW Update Phase{{sw_update_signal_assignments}}
+                    -- SW Request Phase{{sw_request_signal_assignments}}
+                    -- Valid Assignment{{valid_port_assignment}}
+                    -- Evaluator Done assignment{{evaluator_done_assignment}}
+                end if;
+            else
+                upd_and_pe_done <= '0';{{disable_en_signals}}
+            end if;
+        end if;
+    end process;
+
+    -- output port assignment{{output_port_assignments}}
+    valid <= valid_reg;
+    done <= evaluator_done;
+
+end mixed;

@@ -1,0 +1,24 @@
+import math
+
+input lat: Int32
+input lon: Int32
+input velo:Int32
+input gps: UInt8
+input in_time: UInt64
+
+//output gps_freq_off: Bool @ 1Hz := (lat[1s, count] ? 9) < 9
+output gps_freq_off: Bool @ 1Hz := lat.aggregate(over:1s, using: count) < 9
+
+output lon_diff: Int32 := lon - lon.offset(by:-1).defaults(to: lon)
+output lat_diff: Int32 := lat - lat.offset(by:-1).defaults(to: lat)
+output gps_dist: Int32 := cast(sqrt(cast(lon_diff * lon_diff + lat_diff * lat_diff)))
+output gps_velo: Int32 := gps_dist / cast(in_time - in_time.offset(by:-1).defaults(to:0))
+output to_great_dist: Bool := abs(gps_velo - velo) > 1
+
+output cast_velo: UInt32 := cast(velo)
+output hovering: Bool @ 1Hz := cast_velo.aggregate(over: 5s, using:integral).defaults(to:5) < 1
+
+output fast: Bool := velo > 7
+output slowing_down := fast.offset(by:-1).defaults(to:false) & !fast
+
+output counter := 1 + counter.offset(by:-1).defaults(to:0)

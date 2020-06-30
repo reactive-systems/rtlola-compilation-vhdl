@@ -1,0 +1,47 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity event_delay is
+    port(
+        clk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);{{inputs}}
+        push_event_in : std_logic;
+        time_out : out unsigned(63 downto 0);{{outputs}}
+        push_event_out : out std_logic
+    );
+end event_delay;
+
+--* Input Streams and their Types in the Specification:{{print_input_streams}}
+
+architecture behavioral of event_delay is
+
+    -- Internal Signal Declarations
+    signal time_value : unsigned(63 downto 0);
+    signal push_event : std_logic;{{delay_registers}}
+
+    begin
+
+    process(clk, rst) begin
+        if (rst = '1') then
+            -- Reset Phase
+            time_value <= (others => '0');
+            push_event <= '0';{{defaults}}
+        elsif (rising_edge(clk)) then
+            -- Logic Phase: Map Inputs to Internal Signals to Receive a Delay
+            if (push_event_in = '1') then
+                time_value <= time_in;
+                push_event <= push_event_in;{{delay_mapping}}
+            else
+                time_value <= (others => '0');
+                push_event <= '0';{{zero_mapping}}
+            end if;
+        end if;
+    end process;
+
+    time_out <= time_value;
+    push_event_out <= push_event;{{final_mapping}}
+
+end behavioral;

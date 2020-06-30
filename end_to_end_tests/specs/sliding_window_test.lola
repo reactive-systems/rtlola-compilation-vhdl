@@ -1,0 +1,16 @@
+input a: Int32
+
+output s_s @ 10Hz := a.aggregate(over: 0.3s, using: sum)
+output c_s @ 10Hz := a.aggregate(over: 0.3s, using: count)
+output av_s @ 10Hz := a.aggregate(over_exactly: 0.3s, using: avg).defaults(to: 10)
+//output i_s @ 10Hz := a.aggregate(over: 0.3s, using: integral).defaults(to: 10)
+
+output a_u: UInt32 := cast(a)
+output s_u @ 10Hz := a_u.aggregate(over: 0.3s, using: sum)
+output c_u @ 10Hz := a_u.aggregate(over: 0.3s, using: count)
+output av_u @ 10Hz := a_u.aggregate(over_exactly: 0.3s, using: avg).defaults(to: 10)
+//output i_u @ 10Hz := a_u.aggregate(over: 0.3s, using: integral).defaults(to: 10)
+
+
+//trigger c == 1 "count is 1"
+//trigger c == 2 "count is 2"

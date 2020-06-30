@@ -1,0 +1,35 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+
+entity extInterface is
+    port(
+        clk, rst: in std_logic;
+        time_in : in std_logic_vector(63 downto 0);{{inputs}}{{outputs}}
+        time_out : out unsigned(63 downto 0)
+    );
+end extInterface;
+
+--* Input Streams and their Types in the Specification: {{print_input_streams}}
+
+architecture behavioral of extInterface is
+
+    -- Internal Signal Declarations
+    signal time_converted : unsigned(63 downto 0);{{converted_signals}}
+
+begin
+
+    process(clk, rst) begin
+        if rst = '1' then
+            -- Reset Phase
+            time_converted <= to_unsigned(0, time_converted'length);{{signal_default_assignment}}
+        elsif rising_edge(clk) then
+            -- Logic Phase: Convert Input in Numeric Types
+            time_converted <= unsigned(time_in);{{converts}}
+        end if;
+    end process;
+
+    time_out <= time_converted;{{final_mapping}}
+
+end behavioral;

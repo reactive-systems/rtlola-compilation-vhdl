@@ -1,0 +1,9 @@
+    {{name}}_entity_instance: {{name}}_input_stream_entity
+        port map (
+            clk => clk,
+            rst => rst,
+            upd => {{name}}_upd,
+            data_in => {{data_in}},{{data_out}}{{data_valid_out}}
+            done_out => {{name}}_upd_done
+         );
+

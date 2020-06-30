@@ -1,0 +1,75 @@
+#include "xbasic_types.h"
+
+unsigned char convert_to_unsigned_char(char* buf, int pos) {
+    return (unsigned char) buf[pos];
+}
+
+Xint8 convert_to_int8(char* buf, int pos) {
+    Xint8 res = (unsigned char) buf[pos];
+    return res;
+}
+
+Xint16 convert_to_int16(char* buf, int pos) {
+    Xint16 res = ((unsigned char) buf[pos + 1] << 8) | (unsigned char) buf[pos];
+    return res;
+}
+
+Xint32 convert_to_int32(char* buf, int pos) {
+	Xint32 res = 0;
+	for(int i=pos+sizeof(Xint32)-1; i>=pos; i--) {
+		unsigned char v = buf[i];
+		res = (res << 8 ) | v;
+	}
+	return res;
+}
+
+Xuint8 convert_to_uint8(char* buf, int pos) {
+    Xuint8 res = (unsigned char) buf[pos];
+    return res;
+}
+
+Xuint16 convert_to_uint16(char* buf, int pos) {
+    Xuint16 res = ((unsigned char) buf[pos + 1] << 8) | (unsigned char) buf[pos];
+    return res;
+}
+
+Xuint32 convert_to_uint32(char* buf, int pos) {
+	Xuint32 res = 0;
+	for(int i=pos+sizeof(Xuint32)-1; i>=pos; i--) {
+		unsigned char v = buf[i];
+		res = (res << 8 ) | v;
+	}
+	return res;
+}
+
+Xuint64 convert_to_uint64(char* buf, int pos) {
+    Xuint64 res;
+    res.Upper = convert_to_uint32(buf,pos);
+    res.Lower = convert_to_uint32(buf,pos+4);
+    return res;
+}
+
+int convert_to_int(char* buf, int pos) {
+    int res = 0;
+    for(int i=pos+sizeof(int)-1; i>=pos; i--) {
+        unsigned char v = buf[i];
+        res = (res << 8) | v;
+    }
+    return res;
+}
+
+double convert_to_double(char* buf, int pos) {
+    union {char b[sizeof(double)]; double res;} u;
+    for(int i=pos+sizeof(double)-1; i>=pos; i--) {
+        u.b[i-pos] = buf[i];
+    }
+    return u.res;
+}
+
+float convert_to_float(char* buf, int pos) {
+    union {char b[sizeof(float)]; float res;} u;
+    for(int i=pos+sizeof(float)-1; i>=pos; i--) {
+        u.b[i-pos] = buf[i];
+    }
+    return u.res;
+}

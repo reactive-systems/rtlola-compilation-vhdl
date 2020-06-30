@@ -1,0 +1,62 @@
+#include "xbasic_types.h"
+
+void write_double_to_buff(char* buff, int pos, double val) {
+	union {char b[sizeof(double)]; double val;} u;
+	u.val = val;
+	for(int i=pos+sizeof(double)-1; i>=pos;i--) {
+		buff[i] = u.b[i-pos];
+	}
+}
+
+void write_float_to_buff(char* buff, int pos, float val) {
+	union {char b[sizeof(float)]; float val;} u;
+	u.val = val;
+	for(int i=pos+sizeof(float)-1; i>=pos;i--) {
+		buff[i] = u.b[i-pos];
+	}
+}
+
+void write_Xuint8_to_buff(char* buff, int pos, Xuint8 val) {
+	buff[pos] = val;
+}
+
+void write_Xint8_to_buff(char* buff, int pos, Xint8 val) {
+	buff[pos] = val;
+}
+
+void write_Xint16_to_buff(char* buff, int pos, Xint16 val) {
+	union {char b[sizeof(Xint16)]; Xint16 val;} u;
+	u.val = val;
+	for(int i=pos+sizeof(Xint16)-1; i>=pos;i--) {
+		buff[i] = u.b[i-pos];
+	}
+}
+
+void write_Xuint16_to_buff(char* buff, int pos, Xuint16 val) {
+	union {char b[sizeof(Xuint16)]; Xuint16 val;} u;
+	u.val = val;
+	for(int i=pos+sizeof(Xuint16)-1; i>=pos;i--) {
+		buff[i] = u.b[i-pos];
+	}
+}
+
+void write_Xint32_to_buff(char* buff, int pos, Xint32 val) {
+	union {char b[sizeof(Xint32)]; Xint32 val;} u;
+	u.val = val;
+	for(int i=pos+sizeof(Xint32)-1; i>=pos;i--) {
+		buff[i] = u.b[i-pos];
+	}
+}
+
+void write_Xuint32_to_buff(char* buff, int pos, Xuint32 val) {
+	union {char b[sizeof(Xuint32)]; Xuint32 val;} u;
+	u.val = val;
+	for(int i=pos+sizeof(Xuint32)-1; i>=pos;i--) {
+		buff[i] = u.b[i-pos];
+	}
+}
+
+void write_Xuint64(char* buff, int pos, Xuint64 val) {
+	write_Xuint32_to_buff(buff,pos,val.Upper);
+	write_Xuint32_to_buff(buff,pos+sizeof(Xuint32),val.Lower);
+}

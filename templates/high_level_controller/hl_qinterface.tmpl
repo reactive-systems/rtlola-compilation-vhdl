@@ -1,0 +1,67 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity hlQInterface is
+    port (
+        clk, rst : in std_logic;
+        time_for_event : in unsigned(63 downto 0);
+        time_for_deadline : in unsigned(63 downto 0);
+        push_event : std_logic;
+        push_deadline : in std_logic;{{inputs}}{{outputs}}
+        time_out : out unsigned(63 downto 0);
+        push_out : out std_logic
+    );
+end hlQInterface;
+
+--* Streams and their Activation Conditions:
+--* Input Streams {{print_input_streams_without_offset}}
+--* Event-based Output Streams {{print_event_output_streams_without_offset}}
+--* Periodic Output Streams {{print_periodic_output_streams_without_offset}}
+--* Resulting Deadline Array
+--* {{print_deadline_array}}
+
+architecture behavioral of hlQInterface is
+
+    -- Internal Signal Declarations
+    signal clock_state_machine : integer;
+    signal push_to_queue : std_logic;{{push_to_queue_signals}}
+    signal last_deadline_id : integer;
+    signal time_to_queue : unsigned(63 downto 0);
+
+begin
+
+    process(clk, rst) begin
+        if (rst = '1') then
+            -- Reset Phase
+            clock_state_machine <= 0;
+            time_to_queue <= (others => '0');
+            push_to_queue <= '0';
+            last_deadline_id <= 0;{{default_assignments}}
+            -- Initialize Deadline Arrays
+            --* Deadline Array
+            --* {{print_deadline_array}}{{init_dl_arrays}}
+        elsif (rising_edge(clk)) then
+            clock_state_machine <= (clock_state_machine + 1) mod 4;
+            if push_deadline = '1' and clock_state_machine = 0 then
+                -- Deadline Handling
+                push_to_queue <= '1';
+                last_deadline_id <= (last_deadline_id + 1) mod {{deadline_len}};
+                time_to_queue <= time_for_deadline;{{deadline_handling}}
+            elsif push_event = '1' and clock_state_machine = 2 then
+                -- Event Handling
+                push_to_queue <= '1';
+                time_to_queue <= time_for_event;{{event_handling}}
+            else
+                -- Enable No Stream
+                push_to_queue <= '0';{{en_no_stream}}
+            end if;
+        end if;
+    end process;
+
+    push_out <= push_to_queue;
+    time_out <= time_to_queue;{{final_mapping}}
+
+end behavioral;

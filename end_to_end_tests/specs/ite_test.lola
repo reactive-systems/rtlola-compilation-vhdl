@@ -1,0 +1,9 @@
+input a : Int8
+input b : Int16
+input val : Bool
+
+output c : UInt8 := cast(b)
+output d : Int16 := if val then cast(a)+b else cast(a)*b
+output e : Int8 := if b<3 then (if val then a else cast(b)) + 4 else cast(b)
+output counter @1Hz := counter.offset(by:-1).defaults(to:0) + 1
+

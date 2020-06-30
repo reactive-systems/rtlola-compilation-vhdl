@@ -1,0 +1,227 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+
+entity high_level_controller is
+    port(
+        clk, rst : in std_logic;
+        system_clk : in std_logic;
+        time_data_in : in std_logic_vector(63 downto 0);
+        new_input : in std_logic;{{inputs_bit_type}}{{input_and_outputs_en_plus_data}}
+        time_data_out : out unsigned(63 downto 0);
+        push_data_in_query : out std_logic;
+        lost_data : out std_logic
+    );
+end high_level_controller;
+
+architecture mixed of high_level_controller is
+
+component extInterface
+    port (
+        clk, rst : in std_logic;
+        time_in : in std_logic_vector(63 downto 0);{{inputs_bit_type}}{{outputs_numeric_type}}
+        time_out : out unsigned(63 downto 0)
+    );
+end component;
+
+
+component check_new_input
+    port (
+        clk, rst : in std_logic;
+        new_input_in : in std_logic;
+        new_input_out : out std_logic
+    );
+end component;
+
+
+component event_delay
+    port (
+        clk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);{{inputs_numeric_type}}
+        push_event_in : in std_logic;
+        time_out : out unsigned(63 downto 0);{{outputs_numeric_type}}
+        push_event_out : out std_logic
+    );
+end component;
+{% if not online %}
+component event_scheduler
+    port (
+        clk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);
+        hold : in std_logic;{{inputs_numeric_type}}
+        push_event_in : in std_logic;
+        time_out : out unsigned(63 downto 0);
+        push_event_out : out std_logic;{{outputs_numeric_type}}
+        lost_data : out std_logic
+    );
+end component;
+{% endif %}
+{% if online %}
+component time_unit
+    port(
+        rst : in std_logic;
+        clk : in std_logic;
+        sys_time_out : out unsigned(63 downto 0)
+    );
+end component;
+{% else %}
+component time_unit
+    port(
+        clk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);
+        push : in std_logic;
+        time_out : out unsigned(63 downto 0)
+    );
+end component;
+{% endif %}
+
+component scheduler
+    port (
+        clk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);
+        time_last_deadline_out : out unsigned(63 downto 0);
+        hit_deadline_out : out std_logic
+    );
+end component;
+
+
+component hlQInterface is
+    port (
+        clk, rst : in std_logic;
+        time_for_event : in unsigned(63 downto 0);
+        time_for_deadline : in unsigned(63 downto 0);
+        push_event : in std_logic;
+        push_deadline : in std_logic;{{inputs_in_en_type}}{{input_and_outputs_en_plus_data}}
+        time_out : out unsigned(63 downto 0);
+        push_out : out std_logic
+    );
+end component;
+
+    -- Internal Signal Declarations
+    signal time_from_extInterface : unsigned(63 downto 0);
+    signal time_from_time_unit : unsigned(63 downto 0);
+    signal time_from_eventDelay : unsigned(63 downto 0);
+    signal time_from_eventScheduler : unsigned(63 downto 0);
+    signal time_from_scheduler : unsigned(63 downto 0);
+    signal push_from_new_input_check : std_logic;
+    signal push_from_eventDelay : std_logic;
+    signal push_from_eventScheduler : std_logic;
+    {{wire_signals}}
+
+    signal hit_deadline : std_logic;
+    signal hlc_clk_count : integer;
+    signal slow_hlc_clk : std_logic;
+
+begin
+    extInterface_instance: extInterface
+        port map (
+            clk => slow_hlc_clk,
+            rst => rst,
+            time_in => time_data_in,{{input_ext_interface_instance}}{{output_ext_interface_instance}}
+            time_out => time_from_extInterface
+        );
+
+    check_new_input_instance: check_new_input
+        port map (
+            clk => slow_hlc_clk,
+            rst => rst,
+            new_input_in => new_input,
+            new_input_out => push_from_new_input_check
+        );
+
+    event_delay_instance: event_delay
+        port map(
+            clk => slow_hlc_clk,
+            rst => rst,
+            time_in => time_from_time_unit,{{input_event_delay_instance}}
+            push_event_in => push_from_new_input_check,{{output_event_delay_instance}}
+            time_out => time_from_eventDelay,
+            push_event_out => push_from_eventDelay
+        );
+
+{% if not online %}
+    event_scheduler_instance: event_scheduler
+        port map(
+            clk => slow_hlc_clk,
+            rst => rst,
+            hold => hit_deadline,
+            time_in => time_from_time_unit,{{input_event_scheduler_instance}}
+            push_event_in => push_from_eventDelay,
+            time_out => time_from_eventScheduler,{{output_event_scheduler_instance}}
+            push_event_out => push_from_eventScheduler,
+            lost_data => lost_data
+        );
+{% endif %}
+
+{% if online %}
+    time_unit_instance: time_unit
+           port map (
+               clk => system_clk,
+               rst => rst,
+               sys_time_out => time_from_time_unit
+           );
+{% else %}
+    time_unit_instance: time_unit
+            port map (
+                clk => slow_hlc_clk,
+                rst => rst,
+                time_in => time_from_extInterface,
+                push => push_from_new_input_check,
+                time_out => time_from_time_unit
+            );
+{% endif %}
+
+    scheduler_instance: scheduler
+        port map(
+            clk => slow_hlc_clk,
+            rst => rst,
+            time_in => time_from_time_unit,
+            time_last_deadline_out => time_from_scheduler,
+            hit_deadline_out => hit_deadline
+        );
+{% if online %}
+    hlQInterface_instance: hlQInterface
+        port map (
+            clk => clk,
+            rst => rst,
+            time_for_event => time_from_eventDelay,
+            time_for_deadline => time_from_scheduler,
+            push_event => push_from_eventDelay,
+            push_deadline => hit_deadline,{{input_hl_qinterface_instance}}{{output_hl_qinterface_instance}}
+            time_out => time_data_out,
+            push_out => push_data_in_query
+        );
+{% else %}
+    hlQInterface_instance: hlQInterface
+        port map (
+            clk => clk,
+            rst => rst,
+            time_for_event => time_from_eventScheduler,
+            time_for_deadline => time_from_scheduler,
+            push_event => push_from_eventScheduler,
+            push_deadline => hit_deadline,{{input_hl_qinterface_instance}}{{output_hl_qinterface_instance}}
+            time_out => time_data_out,
+            push_out => push_data_in_query
+        );
+{%endif %}
+
+    process(clk, rst) begin
+        if (rst = '1') then
+            -- Reset Phase
+            slow_hlc_clk <= '0';
+            hlc_clk_count <= 0;
+        elsif rising_edge(clk) then
+            -- Logic Phase: Raise Slow Clock Signal Every Fourth Cycle
+            hlc_clk_count <= (hlc_clk_count + 1) mod 4;
+            if hlc_clk_count = 3 then
+                slow_hlc_clk <= '1';
+            else
+                slow_hlc_clk <= '0';
+            end if;
+         end if;
+    end process;
+
+
+
+end mixed;

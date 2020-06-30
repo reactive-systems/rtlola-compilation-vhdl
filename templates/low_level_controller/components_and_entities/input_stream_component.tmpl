@@ -1,0 +1,10 @@
+    component {{name}}_input_stream_entity
+	    port (
+		    clk, upd, rst : in std_logic;
+		    data_in : in {{ty}};
+		    data_out : out {{array_ty}};
+		    data_valid_out : out bit_array({{array_size}} downto 0);
+		    done_out : out std_logic
+	    );
+    end component;
+

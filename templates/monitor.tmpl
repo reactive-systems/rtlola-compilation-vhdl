@@ -1,0 +1,116 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+
+entity monitor is
+    port (
+        clk, tclk, qclk, eclk, rst : in std_logic;
+        input_time : in std_logic_vector(63 downto 0);
+        offline : in std_logic;
+        new_input : in std_logic;{{input}}
+        time_stream : out std_logic_vector(63 downto 0);{{output}}
+        lost_data : out std_logic
+    );
+end monitor;
+
+architecture mixed of monitor is
+
+    -- component declaration
+    component high_level_controller is
+        port (
+            clk, rst : in std_logic;
+            system_clk : in std_logic;
+            time_data_in : in std_logic_vector(63 downto 0);
+            new_input : in std_logic;{{hlc_component_input}}{{component_out}}
+            time_data_out : out unsigned(63 downto 0);
+            push_data_in_query : out std_logic;
+            lost_data : out std_logic
+        );
+    end component;
+
+    component queue is
+        port (
+            clk, rst : in std_logic;
+            push : in std_logic;
+            time_data_in : in unsigned(63 downto 0);{{component_in}}
+            full : out std_logic;
+            pop : in std_logic;
+            time_data_out : out unsigned(63 downto 0);{{component_out}}
+            available : out std_logic
+        );
+    end component;
+
+    component low_level_controller is
+        port (
+            clk, eclk, rst : in std_logic;
+            time_in : in unsigned(63 downto 0);{{evaluator_component_input}}
+            data_available : in std_logic;{{evaluator_component_output}}
+		    pop : out std_logic;
+            eval_done : out std_logic
+        );
+    end component;
+
+    -- signal declarationq
+    -- timing_manager
+    signal push_data_timing : std_logic;
+    signal timing_manager_time : unsigned(63 downto 0);{{timing_manager_signals}}
+    -- query
+    signal queue_is_full : std_logic;
+    signal queue_time : unsigned(63 downto 0);
+    signal pop_queue : std_logic;{{queue_signals}}
+    signal queue_data_available : std_logic;
+    -- evaluator{{evaluator_signals}}
+    -- monitor
+    signal time_stream_reg : std_logic_vector(63 downto 0);{{monitor_signals}}
+
+    signal print : std_logic;
+
+begin
+    -- component instantiation
+    high_level_controller_instance: high_level_controller
+        port map (
+            clk => tclk,
+            system_clk => clk,
+            rst => rst,
+            time_data_in => input_time,
+            new_input => new_input,{{hlc_instance_input}}{{hlc_instance_output}}
+            time_data_out => timing_manager_time,
+            push_data_in_query => push_data_timing,
+            lost_data => lost_data
+        );
+
+    queue_instance: queue
+        port map (
+            clk => qclk,
+            rst => rst,
+            push => push_data_timing,
+            time_data_in => timing_manager_time,{{queue_instance_input}}
+            full => queue_is_full,
+            pop => pop_queue,
+            time_data_out => queue_time,{{queue_instance_output}}
+            available => queue_data_available
+        );
+
+    low_level_controller_instance: low_level_controller
+        port map (
+            clk => clk,
+            eclk => eclk,
+            rst => rst,
+            time_in => queue_time,{{evaluator_instance_input}}
+            data_available => queue_data_available,{{evaluator_instance_output}}
+            pop => pop_queue,
+            eval_done => print
+        );
+
+    process(rst, print) begin
+        if (rst = '1') then
+            time_stream_reg <= (others => '0');{{signal_default_values}}
+        elsif falling_edge(print) then
+            time_stream_reg <= std_logic_vector(queue_time);{{signal_assignment}}
+        end if;
+    end process;
+
+    time_stream <= time_stream_reg;{{final_mapping}}
+
+end mixed;

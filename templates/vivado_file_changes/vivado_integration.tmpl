@@ -1,0 +1,40 @@
+	--------------------------------------------------
+	---- My Components and Signals
+	--------------------------------------------------
+
+    signal time_stream : std_logic_vector(63 downto 0);{{output_values_signal_declaration}}
+    signal lost_data : std_logic;
+
+    component implementation is 
+        port (
+            clk : in std_logic;
+            rst : in std_logic;
+            offline : in std_logic;
+            input_time: in std_logic_vector(63 downto 0);
+            new_input : in std_logic;{{input_values_in_component_declaration}}
+            time_stream : out std_logic_vector(63 downto 0);{{output_values_in_component_declaration}}
+            lost_data : out std_logic
+        );
+    end component;
+
+
+time_stream,{{process_declaration_for_write_output_values}} lost_data
+
+    case loc_addr is {{fill_registers}}{{input_registers}}{{output_registers}}
+        when others =>
+            reg_data_out <= (others => '0');
+    end case;
+
+    -- Add user logic here
+    implementation_inst: implementation
+        port map (
+            clk => S_AXI_ACLK,
+            rst => slv_reg0(1),
+            offline => slv_reg0(0),
+            input_time(31 downto 0) => slv_reg1,
+            input_time(63 downto 32) => slv_reg2,
+            new_input => slv_reg0(2),{{input_values_in_component_instantiation}}
+            time_stream => time_stream,{{output_values_in_component_instantiation}}
+            lost_data => lost_data
+        );
+    -- User logic ends

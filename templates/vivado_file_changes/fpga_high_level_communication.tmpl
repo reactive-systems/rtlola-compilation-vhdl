@@ -1,0 +1,97 @@
+#ifndef SRC_FPGA_COMMUNICATION_H_
+#define SRC_FPGA_COMMUNICATION_H_
+
+#include "xbasic_types.h"
+#include "fpga_low_level_communication.h"
+#include "convert_ctypes_to_bytes.h"
+#include "macros.h"
+#include "sleep.h"
+
+typedef struct {
+	Xuint32 time_up;
+	Xuint32 time_low;
+	Xuint8 new_value;{{input_line_new_inputs}}{{input_line_input_values}}
+} input_line;
+
+typedef struct {
+	Xuint32 time_up;
+	Xuint32 time_low;{{output_line_input_streams}}{{output_line_output_streams}}
+} output_line;
+
+void initialize_input_line(input_line* line) {
+	line->time_up = 0;
+	line->time_low = 0;
+	line->new_inputs_0 = 0;{{input_line_initialize}}
+}
+
+void initialize_output_line(output_line* line) {
+	line->time_up = 0;
+	line->time_low = 0;{{input_line_initialize}}{{output_line_initialize}}
+}
+
+void set_input_in_fpga(input_line* line) {
+	set_input_for_reg(TIME_LOW_REG, line->time_low);
+	set_input_for_reg(TIME_UP_REG, line->time_up);{{set_new_input_values}}{{set_input_values}}
+}
+
+void get_output_from_fpga(output_line* line) {
+    line->time_up = get_reg(TIME_STREAM_REG_HIGH);
+    line->time_low = get_reg(TIME_STREAM_REG_LOW);{{get_input_streams}}{{get_output_streams}}
+}
+
+void write_input_line_as_string(char* buff, input_line* line) {
+{{input_float_conversions}}
+	sprintf(buff,"{{input_line_format_strings}}\n"{{input_line_values}});
+}
+
+void write_output_line_as_string(char* buff, output_line* line) {
+{{input_float_conversions}}{{output_float_conversions}}
+	sprintf(buff, "%lu,  %lu, {{input_line_format_strings}}{{output_line_format_strings}}\n", line->time_low, line->time_up{{input_line_values}}{{output_line_values}});
+}
+
+void write_output_line_as_bytes(char* buff, output_line* line) {
+    int pos = 0;
+    write_Xuint32_to_buff(buff,pos,line->time_up);
+    pos += sizeof(Xuint32);
+    write_Xuint32_to_buff(buff,pos,line->time_low);
+    pos += sizeof(Xuint32);{{input_line_as_bytes}}{{output_line_as_bytes}}
+	buff[pos] = '\n';
+	buff[pos+1] = 0;
+}
+
+void get_file_header(char* buff) {
+    sprintf(buff, "time_low, time_high, {{input_line_header}}{{output_line_header}}\n");
+}
+
+//void read_and_send_counter() {
+//	Xuint32 counter_val = get_reg(COUNTER_STREAM_REG);
+//	xil_printf("%u\n", counter_val);
+//}
+
+void start_compute_output() {
+	set_bit_for_reg(REG_0, NEW_INPUT);
+	usleep(100);
+}
+
+void end_compute_output() {
+	unset_bit_for_reg(REG_0, NEW_INPUT);
+}
+
+int set_up_monitor() {
+	//reset board
+	set_bit_for_reg(REG_0, RST);
+	//set offline / online
+	{{mode}}
+	usleep(100);
+
+	unset_bit_for_reg(REG_0, RST);
+
+	return 0;
+}
+
+void clean_up_monitor() {
+    cleanup_platform();
+}
+
+#endif /* SRC_FPGA_COMMUNICATION_H_ */
+

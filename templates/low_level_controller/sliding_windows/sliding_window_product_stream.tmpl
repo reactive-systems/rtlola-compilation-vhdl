@@ -1,0 +1,91 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity {{target}}_product_sliding_window_entity is
+    port (
+        clk, shift_en, input_handling_en, output_computation_en, rst : in std_logic;
+        input_time : in unsigned(63 downto 0);
+        updt : in {{ty}};
+        product : out {{ty}};
+        valid : out std_logic;
+        shift_done : out std_logic;
+        input_handling_done : out std_logic;
+        output_computation_done : out std_logic
+    );
+end {{target}}_product_sliding_window_entity;
+
+architecture behavioral of {{target}}_product_sliding_window_entity is
+
+    -- buckets
+    signal time_stamp_bucket : unsigned64_array({{bucket_length}} downto 0);
+    signal valid_bucket : bit_array({{bucket_length}} downto 0);
+    signal product_bucket : {{array_ty}};
+
+    -- registers
+    signal last_time_stamp : unsigned(63 downto 0);
+    signal product_reg : {{ty}};
+    signal valid_reg : std_logic;
+
+    -- done signals
+    signal fired_shift : std_logic;
+    signal fired_input_handling : std_logic;
+    signal fired_output_computation : std_logic;
+
+    begin
+
+    process (clk, rst, shift_en, input_handling_en, output_computation_en)
+
+        variable product : {{variable_ty}};{{variable_decl}}
+        begin
+
+        if (rst='1') then
+            product_bucket(product_bucket'high downto 0) <= (others => {{ty_default}});
+            time_stamp_bucket(time_stamp_bucket'high downto 0) <= (others => (others => '0'));
+            valid_bucket(valid_bucket'high downto 0) <= (others => '0');
+            last_time_stamp <= to_unsigned(0, last_time_stamp'length);
+            fired_shift <= '0';
+            fired_input_handling <= '0';
+            fired_output_computation <= '0';
+            product_reg <= (others => '0');
+            valid_reg <= '0';
+        elsif (shift_en ='0' and input_handling_en='0' and output_computation_en='0') then
+            fired_shift <= '0';
+            fired_input_handling <= '0';
+            fired_output_computation <= '0';
+        elsif (rising_edge(clk)) then
+            if (shift_en='1' and fired_shift='0') then
+                -- possible shift
+                if input_time > last_time_stamp then
+                    -- shift bucket
+                    valid_bucket <= valid_bucket(valid_bucket'high-1 downto 0) & '1';
+                    product_bucket <= product_bucket(product_bucket'high-1 downto 0) & {{ty_default}};
+                    time_stamp_bucket <= time_stamp_bucket(time_stamp_bucket'high-1 downto 0) & (last_time_stamp + to_unsigned({{time_per_bucket}}, time_stamp_bucket(0)'length));
+                    last_time_stamp <= last_time_stamp + to_unsigned({{time_per_bucket}}, last_time_stamp'length);
+                else
+                    fired_shift <= '1';
+                end if;
+            elsif (input_handling_en='1' and fired_input_handling='0') then
+                -- got new input and update bucket
+                product := product_bucket(0) * updt;
+                product_bucket(0) <= product({{large_ty_size}} downto 0);
+                fired_input_handling <= '1';
+            elsif (output_computation_en='1' and fired_output_computation='0') then
+                -- produce new output
+                valid_reg <= valid_bucket({{bucket_length}});
+                {{cur_window}}
+                product_reg <= temp_{{bucket_length}}({{large_ty_size}} downto 0);
+                fired_output_computation <= '1';
+            end if;
+        end if;
+    end process;
+
+    product <= product_reg;
+    valid <= valid_reg;
+    shift_done <= fired_shift;
+    input_handling_done <= fired_input_handling;
+    output_computation_done <= fired_output_computation;
+
+end behavioral;

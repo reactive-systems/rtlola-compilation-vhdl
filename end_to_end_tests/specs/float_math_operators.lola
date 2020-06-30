@@ -1,0 +1,17 @@
+import math
+
+input a : Float32
+input b : Float32
+input c : Float32
+
+output plus_op := a + b
+output minus_op := a - b
+output mult_op := a * b
+//output div_op := a / b
+//output mod_op := a % b
+//output pow_op := a**b
+output func_abs := abs(b)
+output func_sqrt : Float32 := sqrt(c)
+
+output counter : Int32 @1Hz := counter.offset(by:-1).defaults(to: 0) + 1
+

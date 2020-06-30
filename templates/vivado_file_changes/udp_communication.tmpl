@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <string.h>
+
+#include "lwip/udp.h"
+#include "ff.h"
+#include "fpga_high_level_communication.h"
+#include "convert_bytes_to_ctypes.h"
+
+
+FRESULT frc, frw, frs;	/* FatFs function common result code */
+FIL fil;				/* File object */
+FATFS fatFs;			/* Work area (filesystem object) for logical drive */
+UINT bw;				/* File write count */
+//input_line* in_line;	/* input line for the FPGA */
+//output_line* out_line;	/* output line for the FPGA */
+Xuint8 lock = 0;
+Xuint8 first = 0;
+
+int transfer_data() {
+	return 0;
+}
+
+void parse_udp_payload(char* p, size_t len, input_line* res) {
+
+}
+
+static void udp_rec(void* arg, struct udp_pcb* pcb, struct pbuf* p, const ip_addr_t *addr, u16_t port) {
+	if (lock == 0) {
+		lock = 1;
+		if (p != NULL) {
+			// read input data
+			size_t len = p->len;
+			char* data = (char*) p->payload;
+			// write new data to fpga
+			input_line in_line;
+			initialize_input_line(&in_line);
+			parse_udp_payload(data,len, &in_line);
+			if (in_line.new_value != 0) {
+				if (first != 0) {
+					// get output values
+					output_line out_line;
+					initialize_output_line(&out_line);
+					get_output_from_fpga(&out_line);
+					//write new values to file
+					char buff[500];
+					write_output_line_as_string(buff, &out_line);
+					// line debug output
+//			          xil_printf("\t%s\r", buff);
+					// end debug output
+					frw = f_write(&fil, buff, strlen(buff), &bw);
+					frs = f_sync(&fil);
+					if (frw || frs) {
+						xil_printf("ERROR: could not write, when receiving a event!\n\r");
+					}
+				}
+				first = 1; 
+				// lines for debug output
+	//		    char in_line_as_string[500];
+	//          write_input_line_as_string(in_line_as_string, &in_line);
+	//          xil_printf("\t%s\r", in_line_as_string);
+				// end debug output
+				set_input_in_fpga(&in_line);
+				// compute new values
+				start_compute_output();
+				end_compute_output();
+			}
+			pbuf_free(p);
+			p = NULL;
+		}
+		lock = 0;
+	} else if (p != NULL) {
+		pbuf_free(p);
+	}
+}
+

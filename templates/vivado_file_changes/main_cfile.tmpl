@@ -1,0 +1,23 @@
+#include "communication_and_board_setup.h"
+#include "netif/xadapter.h"
+
+int main()
+{
+	/* setup/start UDP communication and FPGA monitor */
+	int res_com_setup = setup();
+	if (res_com_setup != 0) {
+		xil_printf("ERROR: com_setup invalid");
+		return res_com_setup;
+	}
+
+	/* receive and process packets */
+	while (1) {
+		xemacif_input(udp_netif);
+		transfer_data();
+	}
+  
+	/* never reached */
+	cleanup_platform();
+
+	return 0;
+}

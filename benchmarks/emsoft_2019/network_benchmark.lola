@@ -1,0 +1,12 @@
+input sender : Bool
+input f_flag : Bool
+input p_flag : Bool
+input s_flag : Bool
+input a_flag : Bool
+input length : Int32
+output size_add_to_buffer : Int32 := if sender then 0 else length
+output bo : Bool {extend @1Hz} := (size_add_to_buffer[1s,sum] ? 0) > 1000
+output sum_open : Int32 := if (!sender) & s_flag then sum_open[-1]?0 + 1 else sum_open[-1]?0
+output sum_close : Int32 := if (!sender) & f_flag then sum_close[-1]?0 + 1 else sum_close[-1]?0
+output con_not_in_bount : Bool := (sum_open - sum_close > 10) | (sum_open - sum_close < 0)
+output possible_dos : Bool {extend@1Hz} := sum_open[5s, count] ? 0 - sum_close[5s,count] ? 0 > 10

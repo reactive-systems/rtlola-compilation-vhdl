@@ -1,0 +1,16 @@
+    {{name}}_sliding_window_entity_instance: {{name}}_sliding_window_entity
+        port map (
+            clk => clk,
+            rst => rst,
+            evict => {{name}}_evict,
+            upd => {{name}}_upd,
+            request => {{name}}_request,
+            time_in => input_time,
+            data_in => {{input_data}}_entity_data_0,
+            data_out => {{name}}_entity_data,
+            data_valid_out => {{name}}_entity_data_valid,
+            evict_done_out => {{name}}_evict_done,
+            upd_done_out => {{name}}_upd_done,
+            request_done_out => {{name}}_request_done
+        );
+

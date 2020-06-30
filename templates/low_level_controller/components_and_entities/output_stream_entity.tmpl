@@ -1,0 +1,10 @@
+    {{name}}_entity_instance: {{name}}_output_stream_entity
+        port map (
+            clk => clk,
+            rst => rst,
+            pe => {{name}}_pe,
+            eval => {{name}}_eval,{{input_streams}}
+{{data}}{{valid}}            pe_done_out => {{name}}_pe_done,
+            eval_done_out => {{name}}_eval_done
+        );
+

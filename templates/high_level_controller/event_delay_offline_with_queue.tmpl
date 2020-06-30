@@ -1,0 +1,188 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity event_manager is
+    port(
+        tclk, qclk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);
+        hold : in std_logic;{{inputs}}
+        push_in : std_logic;
+        time_out : out unsigned(63 downto 0);
+        push_out : out std_logic;{{outputs}}
+        lost_data : out std_logic
+    );
+end event_manager;
+
+architecture behavioral of event_manager is
+
+    -- signal declaration
+    signal time_for_cur_event : unsigned(63 downto 0);
+    signal push_data_to_interface : std_logic;
+    signal push_to_event_buffer : std_logic;
+    signal pop_from_event_buffer : std_logic;
+    signal no_space_in_event_buffer : std_logic;
+    signal data_in_event_buffer : std_logic;
+    signal event_buffer_time_in : unsigned(63 downto 0);{{event_buffer_input_register_declaration}}
+    signal event_buffer_time_out : unsigned(63 downto 0);{{event_buffer_output_register_declaration}}
+    signal time_current
+
+    component event_delay_buffer
+        port(
+            clk,rst : in std_logic;
+            push : in std_logic;
+            time_data_in : in unsigned(63 downto 0);{{event_buffer_input_declaration}}
+            full : out std_logic;
+            pop : in std_logic;
+            time_data_out : out unsigned(63 downto 0);{{event_buffer_output_declaration}}
+            available : out std_logic
+      );
+
+begin
+
+    event_delay_buffer_instance: event_delay_buffer
+        port map {
+            clk => qclk,
+            rst => rst,
+            push => push_to_event_buffer,
+            time_data_in => event_buffer_time_in,{{event_buffer_input_instantiation}}
+            full => no_space_in_event_buffer
+            pop => pop_from_event_buffer
+            time_data_out => event_buffer_time_out,{{event_buffer_output_instantiation}}
+            available => data_in_event_buffer
+        };
+
+
+    process(tclk, rst) begin
+        if (rst = '1') then
+            -- reset phase
+            time_for_cur_event <= (others => '0');
+            push_data_to_interface <= '0';
+            push_to_event_buffer <= '0';
+            pop_from_event_buffer <= '0';
+            no_space_in_event_buffer <= '0';
+            data_in_event_buffer <= '0';
+            event_buffer_time_in <= (others => '0');
+            event_buffer_time_out <= (others => '0');
+        elsif (rising_edge(clk)) then
+            -- logic phase
+            if (hold = '1') then
+                -- deadline for periodic streams reached -> store input in buffer
+                push <= new_input_in;
+                event_buffer_time_in <= time_in;{{push_input_data_to_event_buffer}};
+                lost_data <= no_space_in_event_buffer;
+                pop_from_event_buffer <= '0';
+                push_data_to_interface <= '0';
+            else
+                -- no deadline reached -> give values to interface
+                if (data_in_event_buffer = '1' and push_in = '1') then
+                    -- push incoming event to buffer and pop values
+                    push <= new_input_in;
+                    event_buffer_time_in <= time_in;{{push_input_data_to_event_buffer}};
+                    pop <= '1';
+                    new_input_out <= '1';
+                    time_for_cur_event <= event_buffer_time_out;{{push_data_from_event_buffer}};
+                    push_data_to_interface <= '1';
+                elsif (data_in_event_buffer = '1' and push_in = '0') then
+                    -- pop value from buffer
+                else
+                    -- forward information
+                    push <= '0';
+                    pop <= '0';
+                    time_for_cur_event <= time_in;
+                    push_data_to_interface <= time_in;{{forward_input_data}}
+                end if;
+            end if;
+        end if;
+    end process;
+
+    time_out <= time_for_cur_event;
+    push_out <= push_data_to_interface;{{final_mapping}}
+
+end behavioral;
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.array_type_pkg.all;
+
+entity event_manager is
+    port(
+        clk, rst : in std_logic;
+        time_in : in unsigned(63 downto 0);
+        hold : in std_logic;{{inputs}}
+        push_in : std_logic;
+        time_out : out unsigned(63 downto 0);
+        push_out : out std_logic;{{outputs}}
+        lost_data : out std_logic
+    );
+end event_manager;
+
+architecture behavioral of event_manager is
+
+    -- signal declaration
+    signal time_for_cur_event : unsigned(63 downto 0);
+    signal data_in_event_buffer : integer;
+    signal event_buffer_time : unsigned64_array({{buffer_size}}-1 downto 0);{{event_buffer_declaration}}
+
+begin
+
+    process(tclk, rst) begin
+        if (rst = '1') then
+            -- reset phase
+            time_for_cur_event <= (others => '0');
+            data_in_event_buffer <= 0;
+            event_buffer_time <= (others => (others => '0'));
+        elsif (rising_edge(clk)) then
+            -- logic phase
+            if (hold = '1') then
+                -- deadline for periodic streams reached
+                if push_in = '1' then
+                    -- store input in buffer if possible
+                    if size = {{buffer_size}} then
+                        -- buffer is full
+                        lost_data <= '1';
+                    else
+                        -- push data
+                        lost_data <= '0';
+                        event_buffer_time <= event_buffer_time(event_buffer_time'high - 1 downto 0) & time_in;{{push_data_to_buffer}}
+                    endif;
+                endif;
+            else
+                -- no deadline reached
+                if (data_in_event_buffer
+                push <= new_input_in;
+                event_buffer_time_in <= time_in;{{push_input_data_to_event_buffer}};
+                lost_data <= no_space_in_event_buffer;
+                pop_from_event_buffer <= '0';
+                push_data_to_interface <= '0';
+            else
+                -- no deadline reached -> give values to interface
+                if (data_in_event_buffer = '1' and push_in = '1') then
+                    -- push incoming event to buffer and pop values
+                    push <= new_input_in;
+                    event_buffer_time_in <= time_in;{{push_input_data_to_event_buffer}};
+                    pop <= '1';
+                    new_input_out <= '1';
+                    time_for_cur_event <= event_buffer_time_out;{{push_data_from_event_buffer}};
+                    push_data_to_interface <= '1';
+                elsif (data_in_event_buffer = '1' and push_in = '0') then
+                    -- pop value from buffer
+                else
+                    -- forward information
+                    push <= '0';
+                    pop <= '0';
+                    time_for_cur_event <= time_in;
+                    push_data_to_interface <= time_in;{{forward_input_data}}
+                end if;
+            end if;
+        end if;
+    end process;
+
+    time_out <= time_for_cur_event;
+    push_out <= push_data_to_interface;{{final_mapping}}
+
+end behavioral;
