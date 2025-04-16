@@ -29,12 +29,6 @@ executable_name = "rtlola-compiler-vhdl.exe" if running_on_windows else "rtlola-
 build_mode = os.getenv("BUILD_MODE", default="debug")
 
 repo_base_dir = Path(".").resolve()
-if not Path(".gitlab-ci.yml").exists():
-    if(repo_base_dir.parent/".gitlab-ci.yml").exists():
-        repo_base_dir = repo_base_dir.parent
-    else:
-        print_fail("Run this script from the repo base or from the test directory!")
-        sys.exit(EXIT_FAILURE)
 
 executable_path = repo_base_dir / "target" / build_mode / executable_name
 
@@ -83,7 +77,7 @@ for test in tests:
         if compile_file_result.returncode == 0:
             run_test_result = None
             try:
-                run_test_result = subprocess.run(["python", "build_script.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=str(target_dir), universal_newlines=True, timeout=10)
+                run_test_result = subprocess.run(["python3", "build_script.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=str(target_dir), universal_newlines=True, timeout=10)
             except subprocess.TimeoutExpired:
                 tests_crashed.append(test)
                 print_fail("Could not run compiled file")

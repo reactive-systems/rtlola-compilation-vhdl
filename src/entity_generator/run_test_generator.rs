@@ -1,25 +1,22 @@
-use crate::entity_generator::{GenerateVhdlCode, VHDLGenerator};
-use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
+use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use tera::Tera;
 
 pub(crate) struct TestScriptVHDL<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) num_cycles: u16,
-    pub(crate) num_test_inputs: u16,
+    pub(crate) num_test_inputs: u32,
 }
 
 impl<'a> TestScriptVHDL<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR, num_cycles: u16, num_test_inputs: u16) -> TestScriptVHDL {
+    pub(crate) fn new(ir: &'a RtLolaMir, num_cycles: u16, num_test_inputs: u32) -> TestScriptVHDL<'a> {
         assert_eq!(num_cycles % 2, 0);
         TestScriptVHDL { ir, num_cycles, num_test_inputs }
     }
 }
 
-impl<'a> GenerateVhdlCode for TestScriptVHDL<'a> {
+impl GenerateVhdlCode for TestScriptVHDL<'_> {
     fn template_name(&self) -> String {
         "run_test.tmpl".to_string()
     }
@@ -29,7 +26,7 @@ impl<'a> GenerateVhdlCode for TestScriptVHDL<'a> {
     }
 }
 
-impl<'a> Serialize for TestScriptVHDL<'a> {
+impl Serialize for TestScriptVHDL<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -66,7 +63,7 @@ pub(crate) struct TestScriptSetup {
     pub(crate) asserts: Vec<String>,
 }
 
-impl<'a> TestScriptSetup {
+impl TestScriptSetup {
     pub(crate) fn new() -> TestScriptSetup {
         TestScriptSetup {
             input: Vec::new(),
@@ -83,9 +80,9 @@ impl<'a> TestScriptSetup {
     }
 }
 
-impl<'a> TestScriptVHDL<'a> {
+impl TestScriptVHDL<'_> {
     fn generate_test_script_setup(&self) -> TestScriptSetup {
-        let range_inputs: Vec<u16> = (0..self.num_test_inputs).collect();
+        let range_inputs: Vec<u32> = (0..self.num_test_inputs).collect();
         let mut setup = TestScriptSetup::new();
         setup
             .set_inputs
@@ -160,12 +157,12 @@ mod run_test_generator_test {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use crate::static_constants::NUM_TEST_INPUTS;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

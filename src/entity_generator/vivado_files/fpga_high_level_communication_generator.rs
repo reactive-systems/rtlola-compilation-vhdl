@@ -1,29 +1,27 @@
 use crate::entity_generator::vivado_files::RegisterStatistic;
 use crate::entity_generator::GenerateVhdlCode;
-use crate::static_constants::{
-    FLOAT_32_NUMBER_AFTER_POINT, FLOAT_32_NUMBER_AFTER_POINT_POW_TEN, FLOAT_64_NUMBER_AFTER_POINT,
-    FLOAT_64_NUMBER_AFTER_POINT_POW_TEN,
-};
+use crate::static_constants::{FLOAT_32_NUMBER_AFTER_POINT_POW_TEN, FLOAT_64_NUMBER_AFTER_POINT_POW_TEN};
 use crate::vhdl_wrapper::type_serialize::{
     get_atomic_ty, get_c_type, get_format_string_for_ty, get_value_for_Ty, get_values_for_register_mapping,
     RegisterMappingEnum,
 };
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::{IntTy, Type};
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct FPGAHighLevelCommunication<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) regs: &'a RegisterStatistic,
     pub(crate) mode: bool,
 }
 
 impl<'a> FPGAHighLevelCommunication<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR, regs: &'a RegisterStatistic, mode: bool) -> FPGAHighLevelCommunication<'a> {
+    pub(crate) fn new(ir: &'a RtLolaMir, regs: &'a RegisterStatistic, mode: bool) -> FPGAHighLevelCommunication<'a> {
         FPGAHighLevelCommunication { ir, regs, mode }
     }
 }
 
-impl<'a> GenerateVhdlCode for FPGAHighLevelCommunication<'a> {
+impl GenerateVhdlCode for FPGAHighLevelCommunication<'_> {
     fn template_name(&self) -> String {
         "fpga_high_level_communication.tmpl".to_string()
     }
@@ -33,7 +31,7 @@ impl<'a> GenerateVhdlCode for FPGAHighLevelCommunication<'a> {
     }
 }
 
-impl<'a> Serialize for FPGAHighLevelCommunication<'a> {
+impl Serialize for FPGAHighLevelCommunication<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -118,7 +116,7 @@ impl FPGAHighLevelCommunicationSetup {
     }
 }
 
-impl<'a> FPGAHighLevelCommunication<'a> {
+impl FPGAHighLevelCommunication<'_> {
     fn generate_fpga_high_level_communication(&self) -> FPGAHighLevelCommunicationSetup {
         let mut setup = FPGAHighLevelCommunicationSetup::new();
         let offset = "\t";
@@ -142,7 +140,7 @@ impl<'a> FPGAHighLevelCommunication<'a> {
                         .push(format!("\n\tset_input_for_reg({}_REG, line->{});", cur.name, cur.name));
                     setup.get_input_streams.push(format!("\n\tline->{} = get_reg({}_STREAM_REG);", cur.name, cur.name));
                     let needed_cast = match get_atomic_ty(&cur.ty) {
-                        Type::Int(IntTy::I8) => "(signed char) ",
+                        Type::Int(IntTy::Int8) => "(signed char) ",
                         _ => ""
                     };
                     setup.input_line_values.push(format!(", {}line->{}", needed_cast,cur.name));
@@ -151,7 +149,7 @@ impl<'a> FPGAHighLevelCommunication<'a> {
                     setup.input_line_initialize.push(format!("\n\tline->{} = 0;", cur.name));
                     setup.input_line_as_bytes.push(format!("\n\twrite_{}_to_buff(buff,pos,line->{});\n\tpos += sizeof({});", c_type,cur.name,c_type));
                 }
-                RegisterMappingEnum::FloatRegister | RegisterMappingEnum::ReducedFloatRegister => {
+                RegisterMappingEnum::FloatRegister => {
                     let c_type = c_type.1;
                     let size = get_value_for_Ty(&cur.ty) + 1;
                     setup.input_line_input_values.push(format!("\n\t{} {};", c_type, cur.name));
@@ -260,7 +258,7 @@ impl<'a> FPGAHighLevelCommunication<'a> {
                         .get_output_streams
                         .push(format!("\n\tline->{} = get_reg({}_STREAM_REG);", cur.name, cur.name));
                     let needed_cast = match get_atomic_ty(&cur.ty) {
-                        Type::Int(IntTy::I8) => "(signed char) ",
+                        Type::Int(IntTy::Int8) => "(signed char) ",
                         _ => ""
                     };
                     setup.output_line_values.push(format!(", {}line->{}", needed_cast,cur.name));
@@ -269,7 +267,7 @@ impl<'a> FPGAHighLevelCommunication<'a> {
                     setup.output_line_initialize.push(format!("\n\tline->{} = 0;", cur.name));
                     setup.output_line_as_bytes.push(format!("\n\twrite_{}_to_buff(buff,pos,line->{});\n\tpos += sizeof({});", c_type,cur.name,c_type));
                 }
-                RegisterMappingEnum::FloatRegister | RegisterMappingEnum::ReducedFloatRegister => {
+                RegisterMappingEnum::FloatRegister  => {
                     let c_type = c_type.1;
                     let size = get_value_for_Ty(&cur.ty) + 1;
                     setup.output_line_output_streams.push(format!("\n\t{} {};", c_type, cur.name));
@@ -358,10 +356,11 @@ mod fpga_high_level_communication_file_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

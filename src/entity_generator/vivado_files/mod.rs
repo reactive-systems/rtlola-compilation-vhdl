@@ -1,7 +1,7 @@
 use crate::entity_generator::VHDLGenerator;
 use crate::vhdl_wrapper::type_serialize::{get_values_for_register_mapping, RegisterMappingEnum};
 use crate::Config;
-use rtlola_frontend::ir::RTLolaIR;
+use rtlola_frontend::RtLolaMir;
 
 pub(crate) mod communication_and_board_setup_generator;
 pub(crate) mod convert_bytes_to_ctypes_generator;
@@ -17,12 +17,11 @@ pub(crate) struct RegisterStatistic {
     pub(crate) total_setup_reg: u16,
     pub(crate) total_num_registers_new_input: u16,
     pub(crate) total_num_registers_input_values: u16,
-    pub(crate) total_num_registers_output_values: u16,
     pub(crate) total_num_registers: u16,
 }
 
 impl RegisterStatistic {
-    pub(crate) fn new(ir: &RTLolaIR) -> RegisterStatistic {
+    pub(crate) fn new(ir: &RtLolaMir) -> RegisterStatistic {
         let total_setup_reg = 1;
         let total_num_registers_new_input =
             (&ir.inputs.len() / 32 + (if ir.inputs.len() % 32 != 0 { 1 } else { 0 })) as u16;
@@ -60,7 +59,6 @@ impl RegisterStatistic {
             total_num_registers_new_input,
             total_num_registers,
             total_num_registers_input_values: num_registers_input_values,
-            total_num_registers_output_values: num_registers_output_values,
         }
     }
 }
@@ -69,7 +67,7 @@ pub(crate) fn generate_vivado_files(config: &Config) {
     let mut target = config.target.clone();
     target.push("vivado_files/");
     let tera_files = config.templates.clone() + "/vivado_file_changes/*";
-    let tera = compile_templates!(&tera_files);
+    let tera = tera::compile_templates!(&tera_files);
     let reg_stat = RegisterStatistic::new(&config.ir);
     VHDLGenerator::generate_and_create(
         &communication_and_board_setup_generator::CommunicationAndBoardSetup::new(),

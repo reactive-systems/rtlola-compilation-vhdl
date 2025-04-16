@@ -2,21 +2,21 @@ use crate::entity_generator::GenerateVhdlCode;
 use crate::ir_extension::ExtendedRTLolaIR;
 use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct SlidingWindowComponent<'a> {
     pub(crate) sliding_window: &'a SlidingWindow,
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> SlidingWindowComponent<'a> {
-    pub(crate) fn new(sliding_window: &'a SlidingWindow, ir: &'a RTLolaIR) -> SlidingWindowComponent<'a> {
+    pub(crate) fn new(sliding_window: &'a SlidingWindow, ir: &'a RtLolaMir) -> SlidingWindowComponent<'a> {
         SlidingWindowComponent { sliding_window, ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for SlidingWindowComponent<'a> {
+impl GenerateVhdlCode for SlidingWindowComponent<'_> {
     fn template_name(&self) -> String {
         "sliding_window_stream_component.tmpl".to_string()
     }
@@ -26,7 +26,7 @@ impl<'a> GenerateVhdlCode for SlidingWindowComponent<'a> {
     }
 }
 
-impl<'a> Serialize for SlidingWindowComponent<'a> {
+impl Serialize for SlidingWindowComponent<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -41,7 +41,7 @@ impl<'a> Serialize for SlidingWindowComponent<'a> {
                 self.sliding_window.reference.idx()
             ),
         )?;
-        s.serialize_field("in_ty", &get_vhdl_type(&self.ir.get_ty_for_stream_ref(self.sliding_window.target)))?;
+        s.serialize_field("in_ty", &get_vhdl_type(self.ir.get_ty_for_stream_ref(self.sliding_window.target)))?;
         s.serialize_field("sw_ret_ty", &get_vhdl_type(&self.sliding_window.ty))?;
         s.end()
     }
@@ -51,12 +51,12 @@ impl<'a> Serialize for SlidingWindowComponent<'a> {
 mod output_component_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

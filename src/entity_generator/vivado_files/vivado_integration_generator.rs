@@ -3,21 +3,21 @@ use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::{
     get_values_for_register_mapping, get_vhdl_initial_type, RegisterMappingEnum,
 };
-use rtlola_frontend::ir::RTLolaIR;
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct VivadoIntegration<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) regs: &'a RegisterStatistic,
 }
 
 impl<'a> VivadoIntegration<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR, regs: &'a RegisterStatistic) -> VivadoIntegration<'a> {
+    pub(crate) fn new(ir: &'a RtLolaMir, regs: &'a RegisterStatistic) -> VivadoIntegration<'a> {
         VivadoIntegration { ir, regs }
     }
 }
 
-impl<'a> GenerateVhdlCode for VivadoIntegration<'a> {
+impl GenerateVhdlCode for VivadoIntegration<'_> {
     fn template_name(&self) -> String {
         "vivado_integration.tmpl".to_string()
     }
@@ -27,7 +27,7 @@ impl<'a> GenerateVhdlCode for VivadoIntegration<'a> {
     }
 }
 
-impl<'a> Serialize for VivadoIntegration<'a> {
+impl Serialize for VivadoIntegration<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -90,7 +90,7 @@ impl VivadoIntegrationSetup {
     }
 }
 
-impl<'a> VivadoIntegration<'a> {
+impl VivadoIntegration<'_> {
     fn generate_vivado_integration_setup(&self) -> VivadoIntegrationSetup {
         let mut setup = VivadoIntegrationSetup::new();
         let mut num_registers_input_values = 0;
@@ -206,25 +206,6 @@ impl<'a> VivadoIntegration<'a> {
                         num_registers_input_values += 1;
                         num_registers_output_values += 1;
                     },
-                    RegisterMappingEnum::ReducedFloatRegister => {
-                        setup.input_values_in_component_instantiation.push(format!(
-                            "\n\t\t\t{}_data_in => slv_reg{}(15 downto 0),",
-                            cur.name,
-                            num_registers_input_values + self.regs.total_num_registers_new_input + 3,
-                        ));
-                        setup.input_registers.push(format!(
-                            "\n\t\twhen b\"{}\" => \n\t\t\treg_data_out <= slv_reg{};",
-                            num_as_fix_bit_rep(input_reg_number, num_bit_for_register_rep),
-                            input_reg_number
-                        ));
-                        setup.output_registers.push(format!(
-                            "\n\t\twhen b\"{}\" => \n\t\t\treg_data_out(15 downto 0) <= {}_stream;\n\t\t\treg_data_out(31 downto 16) <= (others => '0');",
-                            num_as_fix_bit_rep(output_reg_number, num_bit_for_register_rep),
-                            cur.name,
-                        ));
-                        num_registers_input_values += 1;
-                        num_registers_output_values += 1;
-                    },
                     RegisterMappingEnum::TwoIntRegisters | RegisterMappingEnum::DoubleRegister => {
                         setup.input_values_in_component_instantiation.push(format!(
                             "\n\t\t\t{}_data_in(31 downto 0) => slv_reg{},\n\t\t\t{}_data_in(63 downto 32) => slv_reg{},",
@@ -313,14 +294,6 @@ impl<'a> VivadoIntegration<'a> {
                         cur.name,
                     ));
                 }
-                RegisterMappingEnum::ReducedFloatRegister => {
-                    num_registers_output_values += 1;
-                    setup.output_registers.push(format!(
-                        "\n\t\twhen b\"{}\" => \n\t\t\treg_data_out(15 downto 0) <= {}_stream;\n\t\treg_data_out(31 downto 16) <= (others => '0');",
-                        num_as_fix_bit_rep(output_reg_number, num_bit_for_register_rep),
-                        cur.name,
-                    ));
-                }
                 RegisterMappingEnum::TwoIntRegisters | RegisterMappingEnum::DoubleRegister => {
                     num_registers_output_values += 2;
                     setup.output_registers.push(format!(
@@ -345,7 +318,7 @@ impl<'a> VivadoIntegration<'a> {
 }
 
 const fn num_bits<T>() -> usize {
-    std::mem::size_of::<T>() * 8
+    size_of::<T>() * 8
 }
 
 fn log_2(x: i32) -> u32 {
@@ -369,10 +342,11 @@ mod vivado_integration_file_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

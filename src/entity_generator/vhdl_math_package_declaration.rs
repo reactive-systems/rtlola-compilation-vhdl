@@ -1,6 +1,6 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::static_constants::serialize_bit_range_representation;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::ser::{Serialize, Serializer};
 
 /// This struct generates the math package in VHDL from the my_math_package template. Currently,
 /// this package builds for every numeric datatype in RTLola, an sqrt-function. For this, we use the
@@ -31,7 +31,7 @@ impl GenerateVhdlCode for MathPackageVHDL {
     }
 }
 
-impl<'a> Serialize for MathPackageVHDL {
+impl Serialize for MathPackageVHDL {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -45,7 +45,7 @@ mod package_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
     #[test]
     fn generate_entity() {

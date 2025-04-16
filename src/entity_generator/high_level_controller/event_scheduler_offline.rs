@@ -1,6 +1,6 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::{mir::InputStream, RtLolaMir};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct EventSchedulerOffline<'a> {
@@ -8,12 +8,12 @@ pub(crate) struct EventSchedulerOffline<'a> {
 }
 
 impl<'a> EventSchedulerOffline<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> EventSchedulerOffline {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> EventSchedulerOffline<'a> {
         EventSchedulerOffline { inputs: &ir.inputs }
     }
 }
 
-impl<'a> GenerateVhdlCode for EventSchedulerOffline<'a> {
+impl GenerateVhdlCode for EventSchedulerOffline<'_> {
     fn template_name(&self) -> String {
         "event_scheduler_offline.tmpl".to_string()
     }
@@ -23,7 +23,7 @@ impl<'a> GenerateVhdlCode for EventSchedulerOffline<'a> {
     }
 }
 
-impl<'a> Serialize for EventSchedulerOffline<'a> {
+impl Serialize for EventSchedulerOffline<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -65,7 +65,7 @@ impl EventSchedulerOfflineSetup {
     }
 }
 
-impl<'a> EventSchedulerOffline<'a> {
+impl EventSchedulerOffline<'_> {
     fn generate_event_manager_setup(&self) -> EventSchedulerOfflineSetup {
         let mut setup = EventSchedulerOfflineSetup::new();
         self.inputs.iter().for_each(|cur| {
@@ -121,12 +121,12 @@ impl<'a> EventSchedulerOffline<'a> {
 mod event_manager_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

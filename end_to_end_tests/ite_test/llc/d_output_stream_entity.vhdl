@@ -11,9 +11,9 @@ use work.my_math_pkg.all;
 --* Storage Requirement: 0
 --* Output Dependencies:
 --* Stream Lookups
---* - a of Type Int8: 0, 0
+--* - a of Type Int8: 0
+--* - b of Type Int16: 0
 --* - val of Type Bool: 0
---* - b of Type Int16: 0, 0
 
 
 entity d_output_stream_entity is 
@@ -21,10 +21,10 @@ entity d_output_stream_entity is
 		clk, pe, eval, rst : in std_logic;
 			a_0 : in signed(7 downto 0);
 			a_data_valid_0 : in std_logic;
-			val_0 : in std_logic;
-			val_data_valid_0 : in std_logic;
 			b_0 : in signed(15 downto 0);
 			b_data_valid_0 : in std_logic;
+			val_0 : in std_logic;
+			val_data_valid_0 : in std_logic;
 		data_out : out signed16_array(0 downto 0);
 		data_valid_out : out bit_array(0 downto 0);
 		pe_done_out : out std_logic;

@@ -1,20 +1,19 @@
 use crate::entity_generator::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::RTLolaIR;
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::path::PathBuf;
 
 pub(crate) struct Implementation<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> Implementation<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> Implementation {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> Implementation<'a> {
         Implementation { ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for Implementation<'a> {
+impl GenerateVhdlCode for Implementation<'_> {
     fn template_name(&self) -> String {
         "implementation.tmpl".to_string()
     }
@@ -24,7 +23,7 @@ impl<'a> GenerateVhdlCode for Implementation<'a> {
     }
 }
 
-impl<'a> Serialize for Implementation<'a> {
+impl Serialize for Implementation<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -90,7 +89,7 @@ impl ImplementationSetup {
     }
 }
 
-impl<'a> Implementation<'a> {
+impl Implementation<'_> {
     fn generate_implementation_setup(&self) -> ImplementationSetup {
         let mut setup = ImplementationSetup::new();
         self.ir.inputs.iter().for_each(|cur| {
@@ -147,12 +146,12 @@ impl<'a> Implementation<'a> {
 mod implementation_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

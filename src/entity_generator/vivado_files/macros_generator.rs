@@ -1,21 +1,21 @@
 use crate::entity_generator::vivado_files::RegisterStatistic;
 use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::{get_values_for_register_mapping, RegisterMappingEnum};
-use rtlola_frontend::ir::RTLolaIR;
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct Macros<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) regs: &'a RegisterStatistic,
 }
 
 impl<'a> Macros<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR, regs: &'a RegisterStatistic) -> Macros<'a> {
+    pub(crate) fn new(ir: &'a RtLolaMir, regs: &'a RegisterStatistic) -> Macros<'a> {
         Macros { ir, regs }
     }
 }
 
-impl<'a> GenerateVhdlCode for Macros<'a> {
+impl GenerateVhdlCode for Macros<'_> {
     fn template_name(&self) -> String {
         "macros.tmpl".to_string()
     }
@@ -25,7 +25,7 @@ impl<'a> GenerateVhdlCode for Macros<'a> {
     }
 }
 
-impl<'a> Serialize for Macros<'a> {
+impl Serialize for Macros<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -51,7 +51,7 @@ impl MacrosSetup {
     }
 }
 
-impl<'a> Macros<'a> {
+impl Macros<'_> {
     fn generate_macros_setup(&self) -> MacrosSetup {
         let mut setup = MacrosSetup::new();
         let mut num_registers_input_values = 0;
@@ -81,8 +81,7 @@ impl<'a> Macros<'a> {
                     RegisterMappingEnum::BoolRegister
                     | RegisterMappingEnum::ReducedIntRegister(_, _)
                     | RegisterMappingEnum::WholeIntRegister
-                    | RegisterMappingEnum::FloatRegister
-                    | RegisterMappingEnum::ReducedFloatRegister => {
+                    | RegisterMappingEnum::FloatRegister => {
                         setup.input_values.push(format!("\n#define {}_REG REG_{}", cur.name, input_reg_number));
                         setup
                             .output_values
@@ -120,8 +119,7 @@ impl<'a> Macros<'a> {
                 RegisterMappingEnum::BoolRegister
                 | RegisterMappingEnum::ReducedIntRegister(_, _)
                 | RegisterMappingEnum::WholeIntRegister
-                | RegisterMappingEnum::FloatRegister
-                | RegisterMappingEnum::ReducedFloatRegister => {
+                | RegisterMappingEnum::FloatRegister => {
                     setup.output_values.push(format!("\n#define {}_STREAM_REG REG_{}", cur.name, output_reg_number));
                     num_registers_output_values += 1;
                 }
@@ -147,10 +145,11 @@ mod macros_file_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

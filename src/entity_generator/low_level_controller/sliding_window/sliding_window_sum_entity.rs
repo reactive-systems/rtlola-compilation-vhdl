@@ -1,29 +1,19 @@
-use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowGeneral;
 use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowTrait;
-use crate::entity_generator::GenerateVhdlCode;
-use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use rtlola_frontend::mir::*;
 
 pub(crate) struct SlidingWindowSumVHDL<'a> {
     pub(crate) sliding_window: &'a SlidingWindow,
-    pub(crate) ir: &'a RTLolaIR,
-    pub(crate) num_buckets: u16,
+    pub(crate) num_buckets: u32,
 }
 
 impl<'a> SlidingWindowSumVHDL<'a> {
-    pub(crate) fn new(
-        sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
-    ) -> SlidingWindowSumVHDL<'a> {
-        SlidingWindowSumVHDL { sliding_window, ir, num_buckets }
+    pub(crate) fn new(sliding_window: &'a SlidingWindow, num_buckets: u32) -> SlidingWindowSumVHDL<'a> {
+        SlidingWindowSumVHDL { sliding_window, num_buckets }
     }
 }
 
-impl<'a> SlidingWindowTrait for SlidingWindowSumVHDL<'a> {
+impl SlidingWindowTrait for SlidingWindowSumVHDL<'_> {
     fn sw_data_buckets(&self) -> String {
         let array_ty = generate_vhdl_array_type_downwards(&self.sliding_window.ty, self.num_buckets - 1);
         format!("signal sum_buckets : {};", array_ty)
@@ -68,13 +58,14 @@ impl<'a> SlidingWindowTrait for SlidingWindowSumVHDL<'a> {
 #[cfg(test)]
 mod sliding_window_tests {
     use super::*;
+    use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowGeneral;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::TypeConfig;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

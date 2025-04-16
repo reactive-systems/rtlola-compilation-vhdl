@@ -10,6 +10,8 @@ use work.my_math_pkg.all;
 --* Input Dependencies:
 --* Storage Requirement: 0
 --* Output Dependencies:
+--* Stream Lookups
+--* - a of Type Int32: window SlidingWin(1)
 --* Window Lookups:
 --* - a.aggregate(over: 0.3 s, using: count) of type UInt64
 

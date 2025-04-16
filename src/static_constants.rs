@@ -1,5 +1,5 @@
 /// File with static constants, used in the FPGA compilation
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::ser::{SerializeStruct, Serializer};
 use std::time::Duration;
 
 /// Constants to slow the system clock, for the high-level controller and low-level controller
@@ -31,9 +31,7 @@ where
     s.end()
 }
 
-/// Number of places for the fractional part of a real number, used in the processing part of the hardware board
-pub(crate) const FLOAT_16_NUMBER_AFTER_POINT: u16 = 4;
-pub(crate) const FLOAT_16_NUMBER_AFTER_POINT_POW_TEN: u16 = 10000;
+// Number of places for the fractional part of a real number, used in the processing part of the hardware board
 
 pub(crate) const FLOAT_32_NUMBER_AFTER_POINT: u16 = 4;
 pub(crate) const FLOAT_32_NUMBER_AFTER_POINT_POW_TEN: u16 = 10000;
@@ -51,4 +49,4 @@ pub(crate) fn get_period_of_system_clock() -> Duration {
 }
 
 /// Number of inputs in the simulation environment, to test the resulting monitor
-pub(crate) const NUM_TEST_INPUTS: u16 = 20;
+pub(crate) const NUM_TEST_INPUTS: u32 = 20;

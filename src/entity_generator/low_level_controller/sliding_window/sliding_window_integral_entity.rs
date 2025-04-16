@@ -1,25 +1,15 @@
-use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowGeneral;
 use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowTrait;
-use crate::entity_generator::GenerateVhdlCode;
-use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use rtlola_frontend::mir::*;
 
 pub(crate) struct SlidingWindowIntegralVHDL<'a> {
     pub(crate) sliding_window: &'a SlidingWindow,
-    pub(crate) ir: &'a RTLolaIR,
-    pub(crate) num_buckets: u16,
+    pub(crate) num_buckets: u32,
 }
 
 impl<'a> SlidingWindowIntegralVHDL<'a> {
-    pub(crate) fn new(
-        sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
-    ) -> SlidingWindowIntegralVHDL<'a> {
-        SlidingWindowIntegralVHDL { sliding_window, ir, num_buckets }
+    pub(crate) fn new(sliding_window: &'a SlidingWindow, num_buckets: u32) -> SlidingWindowIntegralVHDL<'a> {
+        SlidingWindowIntegralVHDL { sliding_window, num_buckets }
     }
 
     fn get_ty_as_string(ty: &Type) -> String {
@@ -39,10 +29,10 @@ impl<'a> SlidingWindowIntegralVHDL<'a> {
     }
 }
 
-impl<'a> SlidingWindowTrait for SlidingWindowIntegralVHDL<'a> {
+impl SlidingWindowTrait for SlidingWindowIntegralVHDL<'_> {
     fn sw_data_buckets(&self) -> String {
         let array_ty_data = generate_vhdl_array_type_downwards(&self.sliding_window.ty, self.num_buckets - 1);
-        let array_ty_time = generate_vhdl_array_type_downwards(&Type::UInt(UIntTy::U64), self.num_buckets - 1);
+        let array_ty_time = generate_vhdl_array_type_downwards(&Type::UInt(UIntTy::UInt64), self.num_buckets - 1);
         let lhs =
             format!("signal lhs_value_buckets : {};\n\tsignal lhs_time_buckets : {};", array_ty_data, array_ty_time);
         let rhs =
@@ -76,7 +66,7 @@ impl<'a> SlidingWindowTrait for SlidingWindowIntegralVHDL<'a> {
 
     fn set_sw_buckets_to_default(&self) -> String {
         let ty_default = get_sw_default_value_with_cast(&self.sliding_window.ty, "sw_data");
-        let time_default = get_sw_default_value_with_cast(&Type::UInt(UIntTy::U64), "time_in");
+        let time_default = get_sw_default_value_with_cast(&Type::UInt(UIntTy::UInt64), "time_in");
         let lhs_value_default =
             format!("lhs_value_buckets(lhs_value_buckets'high downto 0) <= (others => {});", ty_default);
         let lhs_time_default =
@@ -198,13 +188,14 @@ impl<'a> SlidingWindowTrait for SlidingWindowIntegralVHDL<'a> {
 #[cfg(test)]
 mod sliding_window_tests {
     use super::*;
+    use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowGeneral;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::TypeConfig;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

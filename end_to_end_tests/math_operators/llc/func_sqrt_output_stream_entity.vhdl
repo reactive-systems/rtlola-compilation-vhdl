@@ -38,8 +38,8 @@ architecture behavioral of func_sqrt_output_stream_entity is
     process (clk, rst)
         -- temporal variables
 		variable temp_0: signed(31 downto 0) := (others => '0');
-		variable temp_1: sfixed(11 downto -52) := (others => '0');
-		variable temp_2: sfixed(11 downto -52) := (others => '0');
+		variable temp_1: sfixed(8 downto -23) := (others => '0');
+		variable temp_2: sfixed(8 downto -23) := (others => '0');
 		variable temp_3: signed(31 downto 0) := (others => '0');
 	    variable updt : signed(31 downto 0) := (others => '0');
     begin
@@ -60,9 +60,9 @@ architecture behavioral of func_sqrt_output_stream_entity is
 				-- Evaluation
 				--* temp_0 := a 
 				temp_0 := a_0;
-				temp_1 := to_sfixed(temp_0, 11, -52);
+				temp_1 := to_sfixed(temp_0, 8, -23);
 				--* temp_2 := sqrt(cast(a)) 
-				temp_2 := my_sqrt_fixed_64(temp_1);
+				temp_2 := my_sqrt_fixed_32(temp_1);
 				temp_3 := to_signed(temp_2, temp_3'length);
 				updt := temp_3;
 			    -- Register Update

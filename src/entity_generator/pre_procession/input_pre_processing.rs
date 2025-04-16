@@ -1,20 +1,19 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::{mir::InputStream, RtLolaMir};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::path::Prefix::Verbatim;
 
 pub(crate) struct InputPreProcessing<'a> {
     pub(crate) inputs: &'a Vec<InputStream>,
 }
 
 impl<'a> InputPreProcessing<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> InputPreProcessing {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> InputPreProcessing<'a> {
         InputPreProcessing { inputs: &ir.inputs }
     }
 }
 
-impl<'a> GenerateVhdlCode for InputPreProcessing<'a> {
+impl GenerateVhdlCode for InputPreProcessing<'_> {
     fn template_name(&self) -> String {
         "input_pre_processing.tmpl".to_string()
     }
@@ -24,7 +23,7 @@ impl<'a> GenerateVhdlCode for InputPreProcessing<'a> {
     }
 }
 
-impl<'a> Serialize for InputPreProcessing<'a> {
+impl Serialize for InputPreProcessing<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -63,7 +62,7 @@ impl InputPreProcessingSetup {
     }
 }
 
-impl<'a> InputPreProcessing<'a> {
+impl InputPreProcessing<'_> {
     fn generate_delay_register_setup(&self) -> InputPreProcessingSetup {
         let mut setup = InputPreProcessingSetup::new();
         self.inputs.iter().for_each(|cur| {
@@ -110,12 +109,12 @@ impl<'a> InputPreProcessing<'a> {
 mod input_pre_processing_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::{mir::InputStream, RtLolaMir};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct EventDelay<'a> {
@@ -8,12 +8,12 @@ pub(crate) struct EventDelay<'a> {
 }
 
 impl<'a> EventDelay<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> EventDelay {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> EventDelay<'a> {
         EventDelay { inputs: &ir.inputs }
     }
 }
 
-impl<'a> GenerateVhdlCode for EventDelay<'a> {
+impl GenerateVhdlCode for EventDelay<'_> {
     fn template_name(&self) -> String {
         "event_delay.tmpl".to_string()
     }
@@ -23,7 +23,7 @@ impl<'a> GenerateVhdlCode for EventDelay<'a> {
     }
 }
 
-impl<'a> Serialize for EventDelay<'a> {
+impl Serialize for EventDelay<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -68,7 +68,7 @@ impl EventDelaySetup {
     }
 }
 
-impl<'a> EventDelay<'a> {
+impl EventDelay<'_> {
     fn generate_event_manager_setup(&self) -> EventDelaySetup {
         let mut setup = EventDelaySetup::new();
         self.inputs.iter().for_each(|cur| {
@@ -122,12 +122,12 @@ impl<'a> EventDelay<'a> {
 mod event_manager_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

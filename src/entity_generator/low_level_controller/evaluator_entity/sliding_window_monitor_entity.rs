@@ -2,21 +2,21 @@ use crate::entity_generator::GenerateVhdlCode;
 use crate::ir_extension::ExtendedRTLolaIR;
 use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct SlidingWindowMonitorEntity<'a> {
     pub(crate) sliding_window: &'a SlidingWindow,
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> SlidingWindowMonitorEntity<'a> {
-    pub(crate) fn new(sliding_window: &'a SlidingWindow, ir: &'a RTLolaIR) -> SlidingWindowMonitorEntity<'a> {
+    pub(crate) fn new(sliding_window: &'a SlidingWindow, ir: &'a RtLolaMir) -> SlidingWindowMonitorEntity<'a> {
         SlidingWindowMonitorEntity { sliding_window, ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for SlidingWindowMonitorEntity<'a> {
+impl GenerateVhdlCode for SlidingWindowMonitorEntity<'_> {
     fn template_name(&self) -> String {
         "sliding_window_entity.tmpl".to_string()
     }
@@ -26,7 +26,7 @@ impl<'a> GenerateVhdlCode for SlidingWindowMonitorEntity<'a> {
     }
 }
 
-impl<'a> Serialize for SlidingWindowMonitorEntity<'a> {
+impl Serialize for SlidingWindowMonitorEntity<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -52,12 +52,12 @@ impl<'a> Serialize for SlidingWindowMonitorEntity<'a> {
 mod tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

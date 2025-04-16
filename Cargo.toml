@@ -1,8 +1,9 @@
 [package]
 name = "rtlola-compiler-vhdl"
 version = "0.3.1"
-authors = [ "Jan Baumeister <jbaumeister@react.uni-saarland.de>",
-            "Maximilian Schwenger <schwenger@react.uni-saarland.de>",
+authors = [
+    "Jan Baumeister <jbaumeister@react.uni-saarland.de>",
+    "Maximilian Schwenger <schwenger@react.uni-saarland.de>",
 ]
 edition = "2018"
 
@@ -14,5 +15,5 @@ path = "src/bin/rtlola-compiler-vhdl.rs"
 tera = "0.11"
 serde = "1.0"
 serde_derive = "1.0"
-rtlola-frontend = {git = "ssh://git@gitlab.com/reactive-systems/rtlola/rtlola-frontend.git"}
+rtlola-frontend = "0.7.0"
 clap = "2.33.0"

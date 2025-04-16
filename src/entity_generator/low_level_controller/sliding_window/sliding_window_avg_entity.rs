@@ -1,29 +1,19 @@
-use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowGeneral;
 use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowTrait;
-use crate::entity_generator::GenerateVhdlCode;
-use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use rtlola_frontend::mir::*;
 
 pub(crate) struct SlidingWindowAvgVHDL<'a> {
     pub(crate) sliding_window: &'a SlidingWindow,
-    pub(crate) ir: &'a RTLolaIR,
-    pub(crate) num_buckets: u16,
+    pub(crate) num_buckets: u32,
 }
 
 impl<'a> SlidingWindowAvgVHDL<'a> {
-    pub(crate) fn new(
-        sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
-    ) -> SlidingWindowAvgVHDL<'a> {
-        SlidingWindowAvgVHDL { sliding_window, ir, num_buckets }
+    pub(crate) fn new(sliding_window: &'a SlidingWindow, num_buckets: u32) -> SlidingWindowAvgVHDL<'a> {
+        SlidingWindowAvgVHDL { sliding_window, num_buckets }
     }
 }
 
-impl<'a> SlidingWindowTrait for SlidingWindowAvgVHDL<'a> {
+impl SlidingWindowTrait for SlidingWindowAvgVHDL<'_> {
     fn sw_data_buckets(&self) -> String {
         let array_ty = generate_vhdl_array_type_downwards(&self.sliding_window.ty, self.num_buckets - 1);
         format!("signal count_buckets : {};\n\tsignal sum_buckets : {};", array_ty, array_ty)
@@ -54,8 +44,8 @@ impl<'a> SlidingWindowTrait for SlidingWindowAvgVHDL<'a> {
     fn map_and_update_last_sw_bucket(&self) -> String {
         let data_valid = "data_valid_buckets(0) <= '1';".to_string();
         let count = format!(
-            "count_buckets(0) <= {}",
-            format!("count_buckets(0) + {};", get_count_upd(&self.sliding_window.ty, "count_buckets(0)")),
+            "count_buckets(0) <= count_buckets(0) + {};",
+            get_count_upd(&self.sliding_window.ty, "count_buckets(0)"),
         );
         let sum = "sum_buckets(0) <= sum_buckets(0) + data_in;".to_string();
         format!("{}\n\t\t\t\t{}\n\t\t\t\t{}", data_valid, count, sum)
@@ -88,13 +78,14 @@ impl<'a> SlidingWindowTrait for SlidingWindowAvgVHDL<'a> {
 #[cfg(test)]
 mod sliding_window_tests {
     use super::*;
+    use crate::entity_generator::low_level_controller::sliding_window::SlidingWindowGeneral;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::TypeConfig;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

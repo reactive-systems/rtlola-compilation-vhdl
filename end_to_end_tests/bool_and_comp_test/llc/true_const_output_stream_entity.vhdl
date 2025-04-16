@@ -11,20 +11,20 @@ use work.my_math_pkg.all;
 --* Storage Requirement: 0
 --* Output Dependencies:
 --* Stream Lookups
+--* - eq of Type Bool: 0
 --* - lt of Type Bool: 0
 --* - gt of Type Bool: 0
---* - eq of Type Bool: 0
 
 
 entity true_const_output_stream_entity is 
 	port (
 		clk, pe, eval, rst : in std_logic;
+			eq_0 : in std_logic;
+			eq_data_valid_0 : in std_logic;
 			lt_0 : in std_logic;
 			lt_data_valid_0 : in std_logic;
 			gt_0 : in std_logic;
 			gt_data_valid_0 : in std_logic;
-			eq_0 : in std_logic;
-			eq_data_valid_0 : in std_logic;
 		data_out : out bit_array(0 downto 0);
 		data_valid_out : out bit_array(0 downto 0);
 		pe_done_out : out std_logic;
