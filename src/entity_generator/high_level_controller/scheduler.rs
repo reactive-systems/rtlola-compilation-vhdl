@@ -1,23 +1,22 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-use rtlola_frontend::ir::{Deadline, Schedule};
+use rtlola_frontend::mir::Schedule;
 
 pub(crate) struct Scheduler<'a> {
     pub(crate) schedule: &'a Schedule,
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> Scheduler<'a> {
-    pub(crate) fn new(schedule: &'a Schedule, ir: &'a RTLolaIR) -> Scheduler<'a> {
+    pub(crate) fn new(schedule: &'a Schedule, ir: &'a RtLolaMir) -> Scheduler<'a> {
         Scheduler { schedule, ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for Scheduler<'a> {
+impl GenerateVhdlCode for Scheduler<'_> {
     fn template_name(&self) -> String {
         "scheduler.tmpl".to_string()
     }
@@ -27,7 +26,7 @@ impl<'a> GenerateVhdlCode for Scheduler<'a> {
     }
 }
 
-impl<'a> Serialize for Scheduler<'a> {
+impl Serialize for Scheduler<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -64,11 +63,11 @@ impl SchedulerSetup {
     }
 }
 
-impl<'a> Scheduler<'a> {
+impl Scheduler<'_> {
     fn generate_scheduler_setup(&self) -> SchedulerSetup {
         let mut setup = SchedulerSetup::new();
         let mut counter = -1;
-        setup.print_hyper_period = format!("{} seconds", self.schedule.hyper_period.as_secs_f64());
+        setup.print_hyper_period = format!("{} seconds", self.schedule.hyper_period.unwrap().as_secs_f64());
         setup.print_offset_array.push("|".to_string());
         self.schedule.deadlines.iter().for_each(|cur| {
             counter += 1;
@@ -94,19 +93,19 @@ impl<'a> Scheduler<'a> {
 mod periodic_manager_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]
     fn generate_periodic_manager_file() {
         let example_file_content = "input a : Int8\noutput b @1Hz := a.hold().defaults(to:0) + 3\noutput c @2Hz := a.hold().defaults(to:0) + 6";
         let lola_instance = parse(example_file_content).unwrap_or_else(|e| panic!("spec is invalid: {}", e));
-        let schedule = &rtlola_frontend::ir::RTLolaIR::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!(e));
+        let schedule = &RtLolaMir::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!("{}", e));
         let periodic_manager = Scheduler::new(schedule, &lola_instance);
         let tera: Tera = compile_templates!("templates/high_level_controller/*");
         VHDLGenerator::generate_and_create(&periodic_manager, &tera, &PathBuf::from("target/test_files"))
@@ -116,7 +115,7 @@ mod periodic_manager_tests {
     fn periodic_manager_test() {
         let example_file_content = "input a : Int8\noutput b @1Hz := a.hold().defaults(to:0) + 3\noutput c @2Hz := a.hold().defaults(to:0) + 6";
         let lola_instance = parse(example_file_content).unwrap_or_else(|e| panic!("spec is invalid: {}", e));
-        let schedule = &rtlola_frontend::ir::RTLolaIR::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!(e));
+        let schedule = &RtLolaMir::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!("{}", e));
         let periodic_manager = Scheduler::new(schedule, &lola_instance);
         let tera: Tera = compile_templates!("templates/high_level_controller/*");
         let result = VHDLGenerator::generate(&periodic_manager, &tera);

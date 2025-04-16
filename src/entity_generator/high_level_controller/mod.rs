@@ -1,6 +1,5 @@
 use crate::entity_generator::*;
-use rtlola_frontend::ir::RTLolaIR;
-use std::path::PathBuf;
+use rtlola_frontend::RtLolaMir;
 
 pub(crate) mod check_new_input;
 pub(crate) mod event_delay;
@@ -11,18 +10,16 @@ pub(crate) mod scheduler;
 pub(crate) mod time_unit_offline;
 pub(crate) mod time_unit_online;
 
-use crate::ir_extension::ExtendedRTLolaIR;
 use crate::vhdl_wrapper::type_serialize::{get_vhdl_initial_type, get_vhdl_type};
 use crate::Config;
-use rtlola_frontend::ir::{Deadline, Schedule};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) fn generate_timing_manager_entities(config: &Config) {
     let mut target = config.target.clone();
     target.push("hlc/");
     let tera_files = config.templates.clone() + "/high_level_controller/*";
-    let tera = compile_templates!(&tera_files);
-    let schedule = rtlola_frontend::ir::RTLolaIR::compute_schedule(&config.ir).unwrap_or_else(|e| panic!(e));
+    let tera = tera::compile_templates!(&tera_files);
+    let schedule = RtLolaMir::compute_schedule(&config.ir).unwrap_or_else(|e| panic!("{}", e));
     VHDLGenerator::generate_and_create(&ext_interface::ExtInterface::new(&config.ir), &tera, &target);
     VHDLGenerator::generate_and_create(&check_new_input::CheckNewInput::new(), &tera, &target);
     VHDLGenerator::generate_and_create(&event_delay::EventDelay::new(&config.ir), &tera, &target);
@@ -39,21 +36,22 @@ pub(crate) fn generate_timing_manager_entities(config: &Config) {
 
     VHDLGenerator::generate_and_create(&scheduler::Scheduler::new(&schedule, &config.ir), &tera, &target);
     VHDLGenerator::generate_and_create(&hl_qinterface::HlQInterface::new(&schedule, &config.ir), &tera, &target);
-    VHDLGenerator::generate_and_create(&high_level_controller::HLC::new(&config.ir, config.mode), &tera, &target);
+    VHDLGenerator::generate_and_create(&HLC::new(&config.ir, config.mode), &tera, &target);
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub(crate) struct HLC<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) online: bool,
 }
 
 impl<'a> HLC<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR, online: bool) -> HLC {
+    pub(crate) fn new(ir: &'a RtLolaMir, online: bool) -> HLC<'a> {
         HLC { ir, online }
     }
 }
 
-impl<'a> GenerateVhdlCode for HLC<'a> {
+impl GenerateVhdlCode for HLC<'_> {
     fn template_name(&self) -> String {
         "high_level_controller.tmpl".to_string()
     }
@@ -63,7 +61,7 @@ impl<'a> GenerateVhdlCode for HLC<'a> {
     }
 }
 
-impl<'a> Serialize for HLC<'a> {
+impl Serialize for HLC<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -127,7 +125,7 @@ impl TimingManagerSetup {
     }
 }
 
-impl<'a> HLC<'a> {
+impl HLC<'_> {
     fn generate_timing_manager_setup(&self) -> TimingManagerSetup {
         let mut setup = TimingManagerSetup::new();
         self.ir.inputs.iter().for_each(|cur| {
@@ -222,12 +220,12 @@ impl<'a> HLC<'a> {
 mod timing_manager_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

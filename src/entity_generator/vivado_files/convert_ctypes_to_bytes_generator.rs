@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::entity_generator::GenerateVhdlCode;
 
 #[derive(Serialize)]
@@ -23,7 +25,7 @@ mod convert_bytes_to_ctypes_file_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
     #[test]
     fn generate_entity() {

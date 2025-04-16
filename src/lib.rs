@@ -1,45 +1,33 @@
 #![deny(unsafe_code)]
 #![warn(
-// missing_docs,
-missing_debug_implementations,
-missing_copy_implementations,
-trivial_casts,
-trivial_numeric_casts,
-unsafe_code,
-unstable_features,
-unused_import_braces,
-unused_qualifications
+    //missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unstable_features,
+    unused_import_braces,
+    unused_qualifications
 )]
-#![allow(unused_imports)]
-#![allow(dead_code)]
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate tera;
 
 use crate::entity_generator::high_level_controller::generate_timing_manager_entities;
 use crate::entity_generator::low_level_controller::generate_evaluator;
 use crate::entity_generator::queue::generate_vhdl_queue;
-use crate::entity_generator::vivado_files::{generate_vivado_files, RegisterStatistic};
+use crate::entity_generator::vivado_files::generate_vivado_files;
 use crate::pre_procession::*;
 use crate::static_constants::NUM_TEST_INPUTS;
 use clap::{App, Arg, ArgGroup};
 use entity_generator::*;
-use rtlola_frontend::ir::{MemorizationBound, RTLolaIR, Stream};
-use rtlola_frontend::{FrontendConfig, TypeConfig};
+use rtlola_frontend::{ParserConfig, RtLolaMir};
 use static_constants::*;
-use std::fs;
-use std::path::{Path, PathBuf};
-use tera::Tera;
+use std::path::PathBuf;
+use tera::compile_templates;
 
 pub(crate) mod entity_generator;
 pub(crate) mod ir_extension;
 pub(crate) mod static_constants;
 pub(crate) mod vhdl_wrapper;
-
-const CONFIG: FrontendConfig =
-    FrontendConfig { ty: TypeConfig { use_64bit_only: false, type_aliases: false }, allow_parameters: false };
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Hash, Copy)]
 pub enum AdditionalFiles {
@@ -50,7 +38,7 @@ pub enum AdditionalFiles {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    ir: RTLolaIR,
+    ir: RtLolaMir,
     target: PathBuf,
     mode: bool,                                //true=online; false=offline
     additional_files: Option<AdditionalFiles>, //None=no additional files;
@@ -58,7 +46,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Self {
+    pub fn new(args: &[String]) -> Result<Self, Box<dyn std::error::Error>> {
         let parse_matches = App::new("FPGA_StreamLAB")
             .version(env!("CARGO_PKG_VERSION"))
             .author(env!("CARGO_PKG_AUTHORS"))
@@ -102,11 +90,7 @@ impl Config {
 
         let filename = parse_matches.value_of("SPEC").map(|s| s.to_string()).unwrap();
 
-        let contents =
-            fs::read_to_string(&filename).unwrap_or_else(|e| panic!("Could not read file {}: {}.", filename, e));
-
-        let ir = rtlola_frontend::parse(filename.as_str(), contents.as_str(), CONFIG)
-            .unwrap_or_else(|e| panic!("spec is invalid: {}", e));
+        let ir = rtlola_frontend::parse(&ParserConfig::from_path(PathBuf::from(filename))?).unwrap();
 
         let mode = parse_matches.is_present("ONLINE");
 
@@ -130,7 +114,7 @@ impl Config {
             None
         };
 
-        Config { ir, target, mode, additional_files, templates }
+        Ok(Config { ir, target, mode, additional_files, templates })
     }
 
     pub fn generate_vhdl_files(self) {

@@ -11,13 +11,12 @@ pub(crate) mod vhdl_array_package_declaration;
 pub(crate) mod vhdl_math_package_declaration;
 pub(crate) mod vivado_files;
 
-use rtlola_frontend::ir::RTLolaIR;
+use rtlola_frontend::RtLolaMir;
 use serde::Serialize;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
-use std::process;
 use tera::Tera;
 
 pub(crate) trait GenerateVhdlCode: Serialize {

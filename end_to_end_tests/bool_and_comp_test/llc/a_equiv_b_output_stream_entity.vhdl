@@ -13,20 +13,20 @@ use work.my_math_pkg.all;
 --* Storage Requirement: 0
 --* Output Dependencies:
 --* Stream Lookups
---* - a_impl_b of Type Bool: 0
---* - b of Type Bool: 0
 --* - a of Type Bool: 0
+--* - b of Type Bool: 0
+--* - a_impl_b of Type Bool: 0
 
 
 entity a_equiv_b_output_stream_entity is 
 	port (
 		clk, pe, eval, rst : in std_logic;
-			a_impl_b_0 : in std_logic;
-			a_impl_b_data_valid_0 : in std_logic;
-			b_0 : in std_logic;
-			b_data_valid_0 : in std_logic;
 			a_0 : in std_logic;
 			a_data_valid_0 : in std_logic;
+			b_0 : in std_logic;
+			b_data_valid_0 : in std_logic;
+			a_impl_b_0 : in std_logic;
+			a_impl_b_data_valid_0 : in std_logic;
 		data_out : out bit_array(0 downto 0);
 		data_valid_out : out bit_array(0 downto 0);
 		pe_done_out : out std_logic;

@@ -1,30 +1,29 @@
 use crate::entity_generator::{GenerateVhdlCode, VHDLGenerator};
 use crate::vhdl_wrapper::type_serialize::*;
 use crate::Config;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::path::PathBuf;
 
 pub(crate) struct VHDLQueue<'a> {
-    pub(crate) ir: &'a RTLolaIR,
-    pub(crate) queue_length: u16,
+    pub(crate) ir: &'a RtLolaMir,
+    pub(crate) queue_length: u32,
 }
 
 pub(crate) fn generate_vhdl_queue(config: &Config) {
     let mut target = config.target.clone();
     target.push("queue/");
     let tera_files = config.templates.clone() + "/queue/*";
-    let tera = compile_templates!(&tera_files);
+    let tera = tera::compile_templates!(&tera_files);
     VHDLGenerator::generate_and_create(&VHDLQueue::new(&config.ir), &tera, &target);
 }
 
 impl<'a> VHDLQueue<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> VHDLQueue {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> VHDLQueue<'a> {
         VHDLQueue { ir, queue_length: 1 }
     }
 }
 
-impl<'a> GenerateVhdlCode for VHDLQueue<'a> {
+impl GenerateVhdlCode for VHDLQueue<'_> {
     fn template_name(&self) -> String {
         "queue.tmpl".to_string()
     }
@@ -34,7 +33,7 @@ impl<'a> GenerateVhdlCode for VHDLQueue<'a> {
     }
 }
 
-impl<'a> Serialize for VHDLQueue<'a> {
+impl Serialize for VHDLQueue<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -78,7 +77,7 @@ impl VHDLQueueSetup {
     }
 }
 
-impl<'a> VHDLQueue<'a> {
+impl VHDLQueue<'_> {
     fn generate_queue_setup(&self) -> VHDLQueueSetup {
         let mut setup = VHDLQueueSetup::new();
         self.ir.inputs.iter().for_each(|cur| {
@@ -130,12 +129,12 @@ impl<'a> VHDLQueue<'a> {
 mod queue_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

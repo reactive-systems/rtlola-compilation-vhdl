@@ -92,10 +92,10 @@ architecture mixed of evaluator is
 		    clk, pe, eval, rst : in std_logic;
 			a_0 : in signed(7 downto 0);
 			a_data_valid_0 : in std_logic;
-			val_0 : in std_logic;
-			val_data_valid_0 : in std_logic;
 			b_0 : in signed(15 downto 0);
 			b_data_valid_0 : in std_logic;
+			val_0 : in std_logic;
+			val_data_valid_0 : in std_logic;
 		    data_out : out signed16_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -107,12 +107,12 @@ architecture mixed of evaluator is
     component e_output_stream_entity
 	    port (
 		    clk, pe, eval, rst : in std_logic;
-			val_0 : in std_logic;
-			val_data_valid_0 : in std_logic;
 			a_0 : in signed(7 downto 0);
 			a_data_valid_0 : in std_logic;
 			b_0 : in signed(15 downto 0);
 			b_data_valid_0 : in std_logic;
+			val_0 : in std_logic;
+			val_data_valid_0 : in std_logic;
 		    data_out : out signed8_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -241,10 +241,10 @@ begin
             eval => d_eval,
 			a_0 => a_entity_data_0,
 			a_data_valid_0 => a_entity_data_valid_0,
-			val_0 => val_entity_data_0,
-			val_data_valid_0 => val_entity_data_valid_0,
 			b_0 => b_entity_data_0,
 			b_data_valid_0 => b_entity_data_valid_0,
+			val_0 => val_entity_data_0,
+			val_data_valid_0 => val_entity_data_valid_0,
 			data_out(0) => d_entity_data_0,
 			data_valid_out(0) => d_entity_data_valid_0,
             pe_done_out => d_pe_done,
@@ -258,12 +258,12 @@ begin
             rst => rst,
             pe => e_pe,
             eval => e_eval,
-			val_0 => val_entity_data_0,
-			val_data_valid_0 => val_entity_data_valid_0,
 			a_0 => a_entity_data_0,
 			a_data_valid_0 => a_entity_data_valid_0,
 			b_0 => b_entity_data_0,
 			b_data_valid_0 => b_entity_data_valid_0,
+			val_0 => val_entity_data_0,
+			val_data_valid_0 => val_entity_data_valid_0,
 			data_out(0) => e_entity_data_0,
 			data_valid_out(0) => e_entity_data_valid_0,
             pe_done_out => e_pe_done,

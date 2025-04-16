@@ -1,7 +1,6 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::static_constants::{get_period_of_system_clock, get_start_time};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::time::Duration;
 
 pub(crate) struct TimeUnitOnline {}
 
@@ -41,7 +40,7 @@ mod time_unit_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
     #[test]
     fn generate_entity() {

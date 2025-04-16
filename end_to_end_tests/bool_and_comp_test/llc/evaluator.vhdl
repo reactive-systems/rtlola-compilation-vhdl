@@ -230,10 +230,10 @@ architecture mixed of evaluator is
     component a_impl_b_output_stream_entity
 	    port (
 		    clk, pe, eval, rst : in std_logic;
-			b_0 : in std_logic;
-			b_data_valid_0 : in std_logic;
 			a_0 : in std_logic;
 			a_data_valid_0 : in std_logic;
+			b_0 : in std_logic;
+			b_data_valid_0 : in std_logic;
 		    data_out : out bit_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -245,12 +245,12 @@ architecture mixed of evaluator is
     component a_equiv_b_output_stream_entity
 	    port (
 		    clk, pe, eval, rst : in std_logic;
-			a_impl_b_0 : in std_logic;
-			a_impl_b_data_valid_0 : in std_logic;
-			b_0 : in std_logic;
-			b_data_valid_0 : in std_logic;
 			a_0 : in std_logic;
 			a_data_valid_0 : in std_logic;
+			b_0 : in std_logic;
+			b_data_valid_0 : in std_logic;
+			a_impl_b_0 : in std_logic;
+			a_impl_b_data_valid_0 : in std_logic;
 		    data_out : out bit_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -275,12 +275,12 @@ architecture mixed of evaluator is
     component true_const_output_stream_entity
 	    port (
 		    clk, pe, eval, rst : in std_logic;
+			eq_0 : in std_logic;
+			eq_data_valid_0 : in std_logic;
 			lt_0 : in std_logic;
 			lt_data_valid_0 : in std_logic;
 			gt_0 : in std_logic;
 			gt_data_valid_0 : in std_logic;
-			eq_0 : in std_logic;
-			eq_data_valid_0 : in std_logic;
 		    data_out : out bit_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -591,10 +591,10 @@ begin
             rst => rst,
             pe => a_impl_b_pe,
             eval => a_impl_b_eval,
-			b_0 => b_entity_data_0,
-			b_data_valid_0 => b_entity_data_valid_0,
 			a_0 => a_entity_data_0,
 			a_data_valid_0 => a_entity_data_valid_0,
+			b_0 => b_entity_data_0,
+			b_data_valid_0 => b_entity_data_valid_0,
 			data_out(0) => a_impl_b_entity_data_0,
 			data_valid_out(0) => a_impl_b_entity_data_valid_0,
             pe_done_out => a_impl_b_pe_done,
@@ -608,12 +608,12 @@ begin
             rst => rst,
             pe => a_equiv_b_pe,
             eval => a_equiv_b_eval,
-			a_impl_b_0 => a_impl_b_entity_data_0,
-			a_impl_b_data_valid_0 => a_impl_b_entity_data_valid_0,
-			b_0 => b_entity_data_0,
-			b_data_valid_0 => b_entity_data_valid_0,
 			a_0 => a_entity_data_0,
 			a_data_valid_0 => a_entity_data_valid_0,
+			b_0 => b_entity_data_0,
+			b_data_valid_0 => b_entity_data_valid_0,
+			a_impl_b_0 => a_impl_b_entity_data_0,
+			a_impl_b_data_valid_0 => a_impl_b_entity_data_valid_0,
 			data_out(0) => a_equiv_b_entity_data_0,
 			data_valid_out(0) => a_equiv_b_entity_data_valid_0,
             pe_done_out => a_equiv_b_pe_done,
@@ -642,12 +642,12 @@ begin
             rst => rst,
             pe => true_const_pe,
             eval => true_const_eval,
+			eq_0 => eq_entity_data_0,
+			eq_data_valid_0 => eq_entity_data_valid_0,
 			lt_0 => lt_entity_data_0,
 			lt_data_valid_0 => lt_entity_data_valid_0,
 			gt_0 => gt_entity_data_0,
 			gt_data_valid_0 => gt_entity_data_valid_0,
-			eq_0 => eq_entity_data_0,
-			eq_data_valid_0 => eq_entity_data_valid_0,
 			data_out(0) => true_const_entity_data_0,
 			data_valid_out(0) => true_const_entity_data_valid_0,
             pe_done_out => true_const_pe_done,
@@ -798,10 +798,10 @@ begin
 					a_xor_b_eval <= a_xor_b_en and upd_and_pe_done and a_equiv_b_eval_done;
 					--* output true_const := ((lt or gt) or eq)
 					--* Evaluation Phase of Output Stream true_const is Influenced by the following Lookups: 
+					--* - Synchronous Lookup: eq
 					--* - Synchronous Lookup: lt
 					--* - Synchronous Lookup: gt
-					--* - Synchronous Lookup: eq
-					true_const_eval <= true_const_en and upd_and_pe_done and lt_eval_done and gt_eval_done and eq_eval_done;
+					true_const_eval <= true_const_en and upd_and_pe_done and eq_eval_done and lt_eval_done and gt_eval_done;
 					--* output time_stream := ID.hold().defaults(to: 0)
 					--* Evaluation Phase of Output Stream time_stream is Influenced by No Lookup
 					time_stream_eval <= time_stream_en and upd_and_pe_done;

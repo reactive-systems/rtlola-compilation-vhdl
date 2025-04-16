@@ -9,8 +9,8 @@ use work.array_type_pkg.all;
 --* Input Dependencies:
 --* Stream Lookups:
 --* - c: 0
---* - d: 0, 0
---* - e: 0, 0, 0
+--* - d: 0
+--* - e: 0
 --* Storage Requirement: 0
 
 entity b_input_stream_entity is

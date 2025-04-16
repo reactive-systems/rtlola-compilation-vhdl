@@ -8,6 +8,10 @@ use work.my_math_pkg.all;
 --* Output Stream in the Specification
 --* output a_u : UInt32 := cast(a)
 --* Input Dependencies:
+--* Stream Lookups:
+--* - s_u: 
+--* - c_u: 
+--* - av_u: 
 --* Window Lookups:
 --* - s_u: (0.3, sum)
 --* - c_u: (0.3, count)

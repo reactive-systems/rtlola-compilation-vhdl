@@ -27,7 +27,7 @@ impl GenerateVhdlCode for ClockPreProcessingOnline {
     }
 }
 
-impl<'a> Serialize for ClockPreProcessingOnline {
+impl Serialize for ClockPreProcessingOnline {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -46,7 +46,7 @@ mod clock_pre_processing_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
     #[test]
     fn generate_entity() {

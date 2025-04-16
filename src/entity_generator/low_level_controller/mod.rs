@@ -1,11 +1,7 @@
 use crate::entity_generator::*;
-use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
 use crate::Config;
-use rtlola_frontend::ir::{MemorizationBound, RTLolaIR, Stream};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::path::PathBuf;
 
 pub(crate) mod evaluator_entity;
 pub(crate) mod input_entity;
@@ -16,15 +12,15 @@ pub(crate) fn generate_evaluator(config: &Config) {
     let mut target = config.target.clone();
     target.push("llc/");
     let tera_files = config.templates.clone() + "/low_level_controller/*";
-    let tera = compile_templates!(&tera_files);
+    let tera = tera::compile_templates!(&tera_files);
     for input in &config.ir.inputs {
         VHDLGenerator::generate_and_create(&input_entity::InputStreamVHDL::new(input, &config.ir), &tera, &target);
     }
     for output in &config.ir.outputs {
-        VHDLGenerator::generate_and_create(&output_entity::OutputStreamVHDL::new(&output, &config.ir), &tera, &target);
+        VHDLGenerator::generate_and_create(&output_entity::OutputStreamVHDL::new(output, &config.ir), &tera, &target);
     }
     for sw in &config.ir.sliding_windows {
-        sliding_window::generate_sliding_window(sw, &config);
+        sliding_window::generate_sliding_window(sw, config);
     }
     VHDLGenerator::generate_and_create(
         &evaluator_entity::Evaluator::new(&config.ir, config.templates.clone()),
@@ -35,16 +31,16 @@ pub(crate) fn generate_evaluator(config: &Config) {
 }
 
 pub(crate) struct LowLevelController<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> LowLevelController<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> LowLevelController {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> LowLevelController<'a> {
         LowLevelController { ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for LowLevelController<'a> {
+impl GenerateVhdlCode for LowLevelController<'_> {
     fn template_name(&self) -> String {
         "low_level_controller.tmpl".to_string()
     }
@@ -54,7 +50,7 @@ impl<'a> GenerateVhdlCode for LowLevelController<'a> {
     }
 }
 
-impl<'a> Serialize for LowLevelController<'a> {
+impl Serialize for LowLevelController<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -93,7 +89,7 @@ impl LowLevelControllerSetup {
     }
 }
 
-impl<'a> LowLevelController<'a> {
+impl LowLevelController<'_> {
     fn generate_evaluator_setup(&self) -> LowLevelControllerSetup {
         let mut setup = LowLevelControllerSetup::new();
         self.ir.inputs.iter().for_each(|cur| {
@@ -131,12 +127,12 @@ impl<'a> LowLevelController<'a> {
 mod monitor_test {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

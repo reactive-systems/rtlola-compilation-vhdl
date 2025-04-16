@@ -1,20 +1,19 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-use crate::ir_extension::ExtendedRTLolaIR;
-use rtlola_frontend::ir::{Deadline, Schedule};
+use rtlola_frontend::{
+    mir::{ActivationCondition, Schedule, StreamReference},
+    RtLolaMir,
+};
 
 pub(crate) struct HlQInterface<'a> {
     pub(crate) schedule: &'a Schedule,
-    pub(crate) ir: &'a RTLolaIR,
-    //    pub(crate) event_driven_output: Vec<&'a OutputStream>,
-    //pub(crate) time_driven_output: Vec<&'a OutputStream>,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> HlQInterface<'a> {
-    pub(crate) fn new(schedule: &'a Schedule, ir: &'a RTLolaIR) -> HlQInterface<'a> {
+    pub(crate) fn new(schedule: &'a Schedule, ir: &'a RtLolaMir) -> HlQInterface<'a> {
         let mut event = Vec::new();
         let mut time = Vec::new();
         ir.outputs.iter().for_each(|cur| {
@@ -29,7 +28,7 @@ impl<'a> HlQInterface<'a> {
     }
 }
 
-impl<'a> GenerateVhdlCode for HlQInterface<'a> {
+impl GenerateVhdlCode for HlQInterface<'_> {
     fn template_name(&self) -> String {
         "hl_qinterface.tmpl".to_string()
     }
@@ -39,7 +38,7 @@ impl<'a> GenerateVhdlCode for HlQInterface<'a> {
     }
 }
 
-impl<'a> Serialize for HlQInterface<'a> {
+impl Serialize for HlQInterface<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -124,7 +123,7 @@ impl HLQInterfaceSetup {
     }
 }
 
-impl<'a> HlQInterface<'a> {
+impl HlQInterface<'_> {
     fn generate_coordinator_setup(&self) -> HLQInterfaceSetup {
         let mut setup = HLQInterfaceSetup::new();
         self.ir.inputs.iter().for_each(|cur| {
@@ -184,12 +183,13 @@ impl<'a> HlQInterface<'a> {
                 .time_driven
                 .iter()
                 .map(|cur_out| {
-                    let cur_stream_name = self.ir.get_name_for_stream_ref(cur_out.reference);
+                    let cur_stream_name = self.ir.stream(cur_out.reference).name();
                     format!(
                         "\n\t\t\t{}_en_array({}) <= '{}';",
                         cur_stream_name,
                         counter,
-                        if cur_deadline.due.contains(&self.ir.get_output_reference(cur_out.reference)) {
+                        if cur_deadline.due.contains(&rtlola_frontend::mir::Task::Evaluate(cur_out.reference.out_ix()))
+                        {
                             "1"
                         } else {
                             "0"
@@ -202,10 +202,15 @@ impl<'a> HlQInterface<'a> {
                 .due
                 .iter()
                 .map(|cur_periodic_stream_in_deadline| {
+                    let outref = match cur_periodic_stream_in_deadline {
+                        rtlola_frontend::mir::Task::Evaluate(r) => r,
+                        rtlola_frontend::mir::Task::Spawn(r) => r,
+                        rtlola_frontend::mir::Task::Close(r) => r,
+                    };
                     let res = format!(
                         "{}{}",
                         if first { " " } else { ", " },
-                        self.ir.get_name_for_stream_ref(StreamReference::OutRef(*cur_periodic_stream_in_deadline))
+                        self.ir.stream(StreamReference::Out(*outref)).name()
                     );
                     first = false;
                     res
@@ -218,12 +223,11 @@ impl<'a> HlQInterface<'a> {
             let mut input_dependencies = Vec::new();
             let mut ac_as_strings: Vec<String> = Vec::new();
             let mut first = true;
-            let cur_output_stream = self.ir.get_out(cur.reference);
+            let cur_output_stream = self.ir.output(cur.reference);
             //TODO activation condition with disjunction
-            let ac = cur_output_stream.ac.clone().expect("should not be none");
-            let input_streams_for_conjunction = HlQInterface::generate_activation_condition(&ac);
+            let input_streams_for_conjunction = HlQInterface::generate_activation_condition(&cur.ac);
             input_streams_for_conjunction.iter().for_each(|cur_dep| {
-                let input_dep_name = self.ir.get_name_for_stream_ref(**cur_dep);
+                let input_dep_name = self.ir.stream(**cur_dep).name();
                 if input_dep_name != "time" {
                     input_dependencies.push(format!(" and {}_en_in", input_dep_name))
                 }
@@ -248,7 +252,7 @@ impl<'a> HlQInterface<'a> {
             setup.print_event_output_streams.push(format!("- {}", stream_with_ac_as_string));
         });
         self.ir.time_driven.iter().for_each(|cur| {
-            let name = self.ir.get_name_for_stream_ref(cur.reference);
+            let name = self.ir.stream(cur.reference).name();
             let freq = cur.frequency.value;
             let stream_with_ac_as_string = format!("{} @ {}Hz", name, freq);
             setup.deadline_handling.push(format!(
@@ -269,14 +273,13 @@ impl<'a> HlQInterface<'a> {
     }
 
     //TODO implement disjunction
-    fn generate_activation_condition(ac: &Activation<StreamReference>) -> Vec<&StreamReference> {
+    fn generate_activation_condition(ac: &ActivationCondition) -> Vec<&StreamReference> {
         match ac {
-            Activation::True => Vec::new(),
-            Activation::Disjunction(_) => unimplemented!(),
-            Activation::Conjunction(args) => {
+            ActivationCondition::True => Vec::new(),
+            ActivationCondition::Disjunction(_) => unimplemented!(),
+            ActivationCondition::Conjunction(args) => {
                 let mut cur_ac = Vec::new();
                 args.iter().for_each(|arg| {
-                    let arg: &Activation<StreamReference> = arg;
                     let arg_ac = HlQInterface::generate_activation_condition(arg);
                     arg_ac.iter().for_each(|cur_stream| {
                         if !cur_ac.contains(cur_stream) {
@@ -286,7 +289,7 @@ impl<'a> HlQInterface<'a> {
                 });
                 cur_ac
             }
-            Activation::Stream(stream_ref) => vec![stream_ref],
+            ActivationCondition::Stream(stream_ref) => vec![stream_ref],
         }
     }
 }
@@ -295,12 +298,12 @@ impl<'a> HlQInterface<'a> {
 mod coordinator_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]
@@ -308,7 +311,7 @@ mod coordinator_tests {
         let example_file_content =
             "input a : Int8 input b :Int8\noutput c @1Hz := a.hold().defaults(to:0) + 3\noutput d @2Hz := a.hold().defaults(to:0) + 6\noutput e := a + b\noutput f := e +3";
         let lola_instance = parse(example_file_content).unwrap_or_else(|e| panic!("spec is invalid: {}", e));
-        let schedule = &rtlola_frontend::ir::RTLolaIR::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!(e));
+        let schedule = &RtLolaMir::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!("{}", e));
         let eval_controller = HlQInterface::new(schedule, &lola_instance);
         let tera: Tera = compile_templates!("templates/high_level_controller/*");
         VHDLGenerator::generate_and_create(&eval_controller, &tera, &PathBuf::from("target/test_files"))
@@ -319,7 +322,7 @@ mod coordinator_tests {
         let example_file_content =
             "input a : Int8 input b :Int8\noutput c @1Hz := a.hold().defaults(to:0) + 3\noutput d @2Hz := a.hold().defaults(to:0) + 6\noutput e := a + b\noutput f := e +3";
         let lola_instance = parse(example_file_content).unwrap_or_else(|e| panic!("spec is invalid: {}", e));
-        let schedule = &rtlola_frontend::ir::RTLolaIR::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!(e));
+        let schedule = &RtLolaMir::compute_schedule(&lola_instance).unwrap_or_else(|e| panic!("{}", e));
         let eval_controller = HlQInterface::new(schedule, &lola_instance);
         let tera: Tera = compile_templates!("templates/high_level_controller/*");
         let result = VHDLGenerator::generate(&eval_controller, &tera);

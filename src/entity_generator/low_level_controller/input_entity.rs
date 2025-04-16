@@ -1,21 +1,21 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::ir_extension::ExtendedRTLolaIR;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct InputStreamVHDL<'a> {
     pub(crate) input: &'a InputStream,
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> InputStreamVHDL<'a> {
-    pub(crate) fn new(input: &'a InputStream, ir: &'a RTLolaIR) -> InputStreamVHDL<'a> {
+    pub(crate) fn new(input: &'a InputStream, ir: &'a RtLolaMir) -> InputStreamVHDL<'a> {
         InputStreamVHDL { input, ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for InputStreamVHDL<'a> {
+impl GenerateVhdlCode for InputStreamVHDL<'_> {
     fn template_name(&self) -> String {
         "input_stream.tmpl".to_string()
     }
@@ -25,7 +25,7 @@ impl<'a> GenerateVhdlCode for InputStreamVHDL<'a> {
     }
 }
 
-impl<'a> Serialize for InputStreamVHDL<'a> {
+impl Serialize for InputStreamVHDL<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -52,12 +52,12 @@ impl<'a> Serialize for InputStreamVHDL<'a> {
 mod input_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

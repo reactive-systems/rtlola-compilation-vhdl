@@ -8,10 +8,8 @@ use crate::ir_extension::ExtendedRTLolaIR;
 use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
 use crate::Config;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::path::PathBuf;
-use tera::Tera;
 
 pub(crate) mod sliding_window_avg_entity;
 pub(crate) mod sliding_window_integral_entity;
@@ -33,17 +31,17 @@ pub(crate) trait SlidingWindowTrait {
 
 pub(crate) struct SlidingWindowGeneral<'a, T: SlidingWindowTrait> {
     pub(crate) sliding_window: &'a SlidingWindow,
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) time_per_bucket: u64,
-    pub(crate) num_buckets: u16,
+    pub(crate) num_buckets: u32,
     pub(crate) sw_ty: T,
 }
 
 impl<'a> SlidingWindowGeneral<'a, SlidingWindowCountVHDL<'a>> {
     pub(crate) fn new_count(
         sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
+        ir: &'a RtLolaMir,
+        num_buckets: u32,
         time_per_bucket: u64,
     ) -> SlidingWindowGeneral<'a, SlidingWindowCountVHDL<'a>> {
         SlidingWindowGeneral {
@@ -51,7 +49,7 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowCountVHDL<'a>> {
             ir,
             time_per_bucket,
             num_buckets,
-            sw_ty: SlidingWindowCountVHDL::new(sliding_window, ir, num_buckets),
+            sw_ty: SlidingWindowCountVHDL::new(sliding_window, num_buckets),
         }
     }
 }
@@ -59,8 +57,8 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowCountVHDL<'a>> {
 impl<'a> SlidingWindowGeneral<'a, SlidingWindowSumVHDL<'a>> {
     pub(crate) fn new_sum(
         sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
+        ir: &'a RtLolaMir,
+        num_buckets: u32,
         time_per_bucket: u64,
     ) -> SlidingWindowGeneral<'a, SlidingWindowSumVHDL<'a>> {
         SlidingWindowGeneral {
@@ -68,7 +66,7 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowSumVHDL<'a>> {
             ir,
             time_per_bucket,
             num_buckets,
-            sw_ty: SlidingWindowSumVHDL::new(sliding_window, ir, num_buckets),
+            sw_ty: SlidingWindowSumVHDL::new(sliding_window, num_buckets),
         }
     }
 }
@@ -76,8 +74,8 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowSumVHDL<'a>> {
 impl<'a> SlidingWindowGeneral<'a, SlidingWindowAvgVHDL<'a>> {
     pub(crate) fn new_avg(
         sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
+        ir: &'a RtLolaMir,
+        num_buckets: u32,
         time_per_bucket: u64,
     ) -> SlidingWindowGeneral<'a, SlidingWindowAvgVHDL<'a>> {
         SlidingWindowGeneral {
@@ -85,7 +83,7 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowAvgVHDL<'a>> {
             ir,
             time_per_bucket,
             num_buckets,
-            sw_ty: SlidingWindowAvgVHDL::new(sliding_window, ir, num_buckets),
+            sw_ty: SlidingWindowAvgVHDL::new(sliding_window, num_buckets),
         }
     }
 }
@@ -93,8 +91,8 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowAvgVHDL<'a>> {
 impl<'a> SlidingWindowGeneral<'a, SlidingWindowAvgFloatVHDL<'a>> {
     pub(crate) fn new_avg_float(
         sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
+        ir: &'a RtLolaMir,
+        num_buckets: u32,
         time_per_bucket: u64,
     ) -> SlidingWindowGeneral<'a, SlidingWindowAvgFloatVHDL<'a>> {
         SlidingWindowGeneral {
@@ -102,7 +100,7 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowAvgFloatVHDL<'a>> {
             ir,
             time_per_bucket,
             num_buckets,
-            sw_ty: SlidingWindowAvgFloatVHDL::new(sliding_window, ir, num_buckets),
+            sw_ty: SlidingWindowAvgFloatVHDL::new(sliding_window, num_buckets),
         }
     }
 }
@@ -110,8 +108,8 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowAvgFloatVHDL<'a>> {
 impl<'a> SlidingWindowGeneral<'a, SlidingWindowIntegralVHDL<'a>> {
     pub(crate) fn new_integral(
         sliding_window: &'a SlidingWindow,
-        ir: &'a RTLolaIR,
-        num_buckets: u16,
+        ir: &'a RtLolaMir,
+        num_buckets: u32,
         time_per_bucket: u64,
     ) -> SlidingWindowGeneral<'a, SlidingWindowIntegralVHDL<'a>> {
         SlidingWindowGeneral {
@@ -119,12 +117,12 @@ impl<'a> SlidingWindowGeneral<'a, SlidingWindowIntegralVHDL<'a>> {
             ir,
             time_per_bucket,
             num_buckets,
-            sw_ty: SlidingWindowIntegralVHDL::new(sliding_window, ir, num_buckets),
+            sw_ty: SlidingWindowIntegralVHDL::new(sliding_window, num_buckets),
         }
     }
 }
 
-impl<'a, T: SlidingWindowTrait> GenerateVhdlCode for SlidingWindowGeneral<'a, T> {
+impl<T: SlidingWindowTrait> GenerateVhdlCode for SlidingWindowGeneral<'_, T> {
     fn template_name(&self) -> String {
         "sliding_window_general.tmpl".to_string()
     }
@@ -136,7 +134,7 @@ impl<'a, T: SlidingWindowTrait> GenerateVhdlCode for SlidingWindowGeneral<'a, T>
     }
 }
 
-impl<'a, T: SlidingWindowTrait> Serialize for SlidingWindowGeneral<'a, T> {
+impl<T: SlidingWindowTrait> Serialize for SlidingWindowGeneral<'_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -162,7 +160,7 @@ impl<'a, T: SlidingWindowTrait> Serialize for SlidingWindowGeneral<'a, T> {
         s.serialize_field("annotation", &annotation)?;
         s.serialize_field("input_type_annotation", &ty_from_input_stream.to_string())?;
         s.serialize_field("return_type_annotation", &self.sliding_window.ty.to_string())?;
-        s.serialize_field("in_ty", &get_vhdl_type(&ty_from_input_stream))?;
+        s.serialize_field("in_ty", &get_vhdl_type(ty_from_input_stream))?;
         s.serialize_field("sw_ret_ty", &get_vhdl_type(&self.sliding_window.ty))?;
         s.serialize_field("bucket_length", &(&self.num_buckets - 1))?;
         s.serialize_field("sw_zero_assignment", &get_sw_default_value_with_cast(&self.sliding_window.ty, "sw_data"))?;
@@ -180,9 +178,9 @@ impl<'a, T: SlidingWindowTrait> Serialize for SlidingWindowGeneral<'a, T> {
         s.serialize_field("finalize_sw", &self.sw_ty.finalize_sw())?;
         s.serialize_field("finalize_valid", &self.sw_ty.finalize_valid())?;
         let streams_where_window_is_used =
-            self.ir.get_streams_where_window_is_used(self.ir.get_window(self.sliding_window.reference));
+            self.ir.get_streams_where_window_is_used(self.ir.sliding_window(self.sliding_window.reference));
         assert_eq!(streams_where_window_is_used.len(), 1, "not implemented, when window is used more than one time");
-        let used_stream = self.ir.get_out(streams_where_window_is_used[0]);
+        let used_stream = self.ir.output(streams_where_window_is_used[0]);
         let mut freq_of_used_stream = None;
         self.ir.time_driven.iter().for_each(|cur| {
             if cur.reference == used_stream.reference {
@@ -200,7 +198,7 @@ pub(crate) fn generate_sliding_window(sw: &SlidingWindow, config: &Config) {
     let mut target = config.target.clone();
     target.push("llc/");
     let tera_files = config.templates.clone() + "/low_level_controller/sliding_windows/*";
-    let tera = compile_templates!(&tera_files);
+    let tera = tera::compile_templates!(&tera_files);
 
     let num_buckets = config.ir.get_num_buckets(sw);
     let time_per_bucket = (sw.duration.as_nanos() / u128::from(num_buckets)) as u64;
@@ -217,7 +215,7 @@ pub(crate) fn generate_sliding_window(sw: &SlidingWindow, config: &Config) {
             &target,
         ),
         WindowOperation::Average => {
-            if is_float_type(&sw.ty) != None {
+            if is_float_type(&sw.ty).is_some() {
                 VHDLGenerator::generate_and_create(
                     &SlidingWindowGeneral::new_avg_float(sw, &config.ir, num_buckets, time_per_bucket),
                     &tera,

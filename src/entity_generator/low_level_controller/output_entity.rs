@@ -1,22 +1,21 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::ir_extension::ExtendedRTLolaIR;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct OutputStreamVHDL<'a> {
     pub(crate) output: &'a OutputStream,
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> OutputStreamVHDL<'a> {
-    pub(crate) fn new(output: &'a OutputStream, ir: &'a RTLolaIR) -> OutputStreamVHDL<'a> {
+    pub(crate) fn new(output: &'a OutputStream, ir: &'a RtLolaMir) -> OutputStreamVHDL<'a> {
         OutputStreamVHDL { output, ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for OutputStreamVHDL<'a> {
+impl GenerateVhdlCode for OutputStreamVHDL<'_> {
     fn template_name(&self) -> String {
         "output_stream.tmpl".to_string()
     }
@@ -26,7 +25,7 @@ impl<'a> GenerateVhdlCode for OutputStreamVHDL<'a> {
     }
 }
 
-impl<'a> Serialize for OutputStreamVHDL<'a> {
+impl Serialize for OutputStreamVHDL<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -46,8 +45,8 @@ impl<'a> Serialize for OutputStreamVHDL<'a> {
         s.serialize_field("expr", &exp)?;
         let mut ac_as_strings = Vec::new();
         let mut first = true;
-        self.output.input_dependencies.iter().for_each(|cur| {
-            let name = self.ir.get_name_for_stream_ref(*cur);
+        self.output.accessed_by.iter().for_each(|(cur, _)| {
+            let name = self.ir.stream(*cur).name();
             if first {
                 first = false;
                 ac_as_strings.push(name.to_string());
@@ -72,11 +71,11 @@ impl<'a> Serialize for OutputStreamVHDL<'a> {
 mod output_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::TypeConfig;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[ignore] // fix lowering

@@ -8,7 +8,7 @@ use work.array_type_pkg.all;
 --* input a : Int8
 --* Input Dependencies:
 --* Stream Lookups:
---* - d: 0, 0
+--* - d: 0
 --* - e: 0
 --* Storage Requirement: 0
 

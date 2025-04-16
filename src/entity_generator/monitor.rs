@@ -1,20 +1,19 @@
 use crate::entity_generator::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::RTLolaIR;
+use rtlola_frontend::RtLolaMir;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::path::PathBuf;
 
 pub(crate) struct Monitor<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
 }
 
 impl<'a> Monitor<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR) -> Monitor {
+    pub(crate) fn new(ir: &'a RtLolaMir) -> Monitor<'a> {
         Monitor { ir }
     }
 }
 
-impl<'a> GenerateVhdlCode for Monitor<'a> {
+impl GenerateVhdlCode for Monitor<'_> {
     fn template_name(&self) -> String {
         "monitor.tmpl".to_string()
     }
@@ -24,7 +23,7 @@ impl<'a> GenerateVhdlCode for Monitor<'a> {
     }
 }
 
-impl<'a> Serialize for Monitor<'a> {
+impl Serialize for Monitor<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -106,7 +105,7 @@ impl MonitorSetup {
     }
 }
 
-impl<'a> Monitor<'a> {
+impl Monitor<'_> {
     fn generate_monitor_setup(&self) -> MonitorSetup {
         let mut setup = MonitorSetup::new();
         self.ir.inputs.iter().for_each(|cur| {
@@ -212,21 +211,20 @@ impl<'a> Monitor<'a> {
 mod monitor_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]
     fn generate_monitor_file() {
         let example_file_content =
             "input a : Int8 input b :Int8\noutput c @1Hz := a.hold().defaults(to:0) + 3\noutput d @2Hz := a.hold().defaults(to:0) + 6\noutput e := a + b";
-        let lola_instance = parse(example_file_content).unwrap_or_else(|e| panic!("spec is invalid: {}", e));
+        let lola_instance = parse(example_file_content).unwrap();
         let monitor = Monitor::new(&lola_instance);
-        let tera: Tera = compile_templates!("templates/*");
+        let tera: Tera = tera::compile_templates!("templates/*");
         VHDLGenerator::generate_and_create(&monitor, &tera, &PathBuf::from("target/test_files"))
     }
 }

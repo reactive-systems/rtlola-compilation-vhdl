@@ -1,22 +1,22 @@
 use crate::entity_generator::low_level_controller::output_entity::OutputStreamVHDL;
 use crate::ir_extension::ExtendedRTLolaIR;
-use crate::static_constants::{FLOAT_32_HIGH, FLOAT_32_LOW, FLOAT_64_HIGH, FLOAT_64_LOW};
 use crate::vhdl_wrapper::type_serialize::*;
-use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use rtlola_frontend::mir::*;
 
 const OFFSET: &str = "\t\t\t\t";
 
 //--------------------Expression and Statement------------------------------------------------------
 
-impl<'a> OutputStreamVHDL<'a> {
+impl OutputStreamVHDL<'_> {
     pub(crate) fn generate_vhdl_expression_and_temporaries(&self) -> (String, String, String) {
-        let (counter, types, expr_eval, expr_as_string) = self.generate_vhdl_expression(&self.output.expr, 0);
+        assert_eq!(1, self.output.eval.clauses.len());
+        let (counter, types, expr_eval, expr_as_string) =
+            self.generate_vhdl_expression(&self.output.eval.clauses[0].expression, 0);
         let temp = self.generate_vhdl_temporaries_declarations(types);
         (temp, format!("{}\n{}updt := temp_{};", expr_eval, OFFSET, counter - 1), expr_as_string)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn generate_expression_with_cast(
         lhs_counter: u16,
         rhs_counter: u16,
@@ -98,79 +98,83 @@ impl<'a> OutputStreamVHDL<'a> {
                 },
                 Constant::Str(_) => unimplemented!("Type str not yet implemented"),
             },
-            OffsetLookup { target, offset } => {
-                let target_str = self.ir.get_name_for_stream_ref(*target);
-                let offset = get_offset_as_string(offset);
-                let annotation = format!("{}.offset(by: {})", target_str, offset);
-                (
-                    counter + 1,
-                    vec![(self.ir.get_ty_for_stream_ref(*target).clone(), TemporaryTypeHelp::Type)],
-                    format!(
-                        "\n{}--* temp_{} := {}\n{}temp_{} := {}_{};",
-                        OFFSET, counter, annotation, OFFSET, counter, target_str, offset
-                    ),
-                    annotation,
-                )
-            }
-            WindowLookup(window_ref) => {
-                let window = self.ir.get_window(*window_ref);
-                let in_stream = self.ir.get_name_for_stream_ref(window.target);
-                let sw_ty = get_str_for_sw_op(window.op);
-                let annotation =
-                    format!("{}.aggregate(over: {}s, using: {})", in_stream, window.duration.as_secs_f64(), sw_ty);
-                (
-                    counter + 1,
-                    vec![(window.ty.clone(), TemporaryTypeHelp::Type)],
-                    format!(
-                        "\n{}--* temp_{} := {} \n{}temp_{} := {}_{}_{}_sw;",
-                        OFFSET,
-                        counter,
-                        annotation,
-                        OFFSET,
-                        counter,
-                        in_stream,
-                        sw_ty,
-                        window_ref.idx()
-                    ),
-                    annotation,
-                )
-            }
-            StreamAccess(sr, kind) => {
-                let name = self.ir.get_name_for_stream_ref(*sr);
-                match kind {
-                    StreamAccessKind::Sync => (
-                        counter + 1,
-                        vec![(self.ir.get_ty_for_stream_ref(*sr).clone(), TemporaryTypeHelp::Type)],
-                        format!(
-                            "\n{}--* temp_{} := {} \n{}temp_{} := {}_0;",
-                            OFFSET, counter, name, OFFSET, counter, name
-                        ),
-                        name.to_string(),
-                    ),
+            StreamAccess { target, parameters: _, access_kind } => {
+                match access_kind {
+                    StreamAccessKind::Offset(offset) => {
+                        let target_str = self.ir.get_name_for_stream_ref(*target);
+                        let offset = get_offset_as_string(&StreamAccessKind::Offset(*offset)).unwrap();
+                        let annotation = format!("{}.offset(by: {})", target_str, offset);
+                        (
+                            counter + 1,
+                            vec![(self.ir.get_ty_for_stream_ref(*target).clone(), TemporaryTypeHelp::Type)],
+                            format!(
+                                "\n{}--* temp_{} := {}\n{}temp_{} := {}_{};",
+                                OFFSET, counter, annotation, OFFSET, counter, target_str, offset
+                            ),
+                            annotation,
+                        )
+                    },
+                    StreamAccessKind::SlidingWindow(window_ref) => {
+                        let window = self.ir.sliding_window(*window_ref);
+                        let in_stream = self.ir.get_name_for_stream_ref(window.target);
+                        let sw_ty = get_str_for_sw_op(window.op);
+                        let annotation =
+                            format!("{}.aggregate(over: {}s, using: {})", in_stream, window.duration.as_secs_f64(), sw_ty);
+                        (
+                            counter + 1,
+                            vec![(window.ty.clone(), TemporaryTypeHelp::Type)],
+                            format!(
+                                "\n{}--* temp_{} := {} \n{}temp_{} := {}_{}_{}_sw;",
+                                OFFSET,
+                                counter,
+                                annotation,
+                                OFFSET,
+                                counter,
+                                in_stream,
+                                sw_ty,
+                                window_ref.idx()
+                            ),
+                            annotation,
+                        )
+                    },
+                    StreamAccessKind::Sync => {
+                        let name = self.ir.get_name_for_stream_ref(*target);
+                        (
+                            counter + 1,
+                            vec![(self.ir.get_ty_for_stream_ref(*target).clone(), TemporaryTypeHelp::Type)],
+                            format!(
+                                "\n{}--* temp_{} := {} \n{}temp_{} := {}_0;",
+                                OFFSET, counter, name, OFFSET, counter, name
+                            ),
+                            name.to_string(),
+                        )
+                    },
                     StreamAccessKind::Hold => {
+                        let name = self.ir.get_name_for_stream_ref(*target);
                         let annotation = format!("{}.hold()", name);
                         (
                             counter + 1,
-                            vec![(self.ir.get_ty_for_stream_ref(*sr).clone(), TemporaryTypeHelp::Type)],
+                            vec![(self.ir.get_ty_for_stream_ref(*target).clone(), TemporaryTypeHelp::Type)],
                             format!(
                                 "\n{}--* temp_{} := {} \n{}temp_{} := {}_0;",
                                 OFFSET, counter, annotation, OFFSET, counter, name
                             ),
                             annotation,
                         )
-                    }
-                    StreamAccessKind::Optional => unimplemented!(),
+                    },
+                    StreamAccessKind::DiscreteWindow(_) | StreamAccessKind::InstanceAggregation(_) | StreamAccessKind::Get | StreamAccessKind::Fresh => unimplemented!()
                 }
+
             }
-            ArithLog(arith_op, operands, ty) => {
-                use rtlola_frontend::ir::ArithLogOp::*;
+            ArithLog(arith_op, operands) => {
+                use rtlola_frontend::mir::ArithLogOp::*;
                 let op = get_str_for_arith_op(*arith_op);
                 let (lhs_counter_ret, mut lhs_types, lhs_res, lhs_as_string) =
                     self.generate_vhdl_expression(&operands[0], counter);
 
                 match arith_op {
                     Not | Neg => {
-                        lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                        lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                         let annotation = format!("({} {})", op, lhs_as_string);
                         (
                             lhs_counter_ret + 1,
@@ -193,12 +197,12 @@ impl<'a> OutputStreamVHDL<'a> {
                         let (rhs_counter_ret, rhs_types, rhs_res, rhs_as_string) =
                             self.generate_vhdl_expression(&operands[1], lhs_counter_ret);
                         lhs_types.extend(rhs_types);
-                        let float_ty = is_float_type(ty);
+                        let float_ty = is_float_type(&exp.ty);
                         match float_ty {
                             Some(size_ty) => {
                                 let (high, low) = get_float_range(size_ty);
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::FloatBounds(high + 1, low)));
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::FloatBounds(high + 1, low)));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 OutputStreamVHDL::generate_expression_with_cast(
                                     lhs_counter_ret,
                                     rhs_counter_ret,
@@ -213,7 +217,7 @@ impl<'a> OutputStreamVHDL<'a> {
                                 )
                             }
                             None => {
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 let annotation = format!("({} {} {})", lhs_as_string, op, rhs_as_string);
                                 (
                                     rhs_counter_ret + 1,
@@ -240,13 +244,13 @@ impl<'a> OutputStreamVHDL<'a> {
                         let (rhs_counter_ret, rhs_types, rhs_res, rhs_as_string) =
                             self.generate_vhdl_expression(&operands[1], lhs_counter_ret);
                         lhs_types.extend(rhs_types);
-                        let float_ty = is_float_type(ty);
+                        let float_ty = is_float_type(&exp.ty);
                         match float_ty {
                             Some(fl_ty) => {
                                 let (high, low) = get_float_range(fl_ty);
                                 lhs_types
-                                    .push((ty.clone(), TemporaryTypeHelp::FloatBounds(high - low + 1, low - high)));
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                    .push((exp.ty.clone(), TemporaryTypeHelp::FloatBounds(high - low + 1, low - high)));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 OutputStreamVHDL::generate_expression_with_cast(
                                     lhs_counter_ret,
                                     rhs_counter_ret,
@@ -261,7 +265,7 @@ impl<'a> OutputStreamVHDL<'a> {
                                 )
                             }
                             None => {
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 let annotation = format!("({} {} {})", lhs_as_string, op, rhs_as_string);
                                 (
                                     rhs_counter_ret + 1,
@@ -288,7 +292,7 @@ impl<'a> OutputStreamVHDL<'a> {
                         let (rhs_counter_ret, rhs_types, rhs_res, rhs_as_string) =
                             self.generate_vhdl_expression(&operands[1], lhs_counter_ret);
                         lhs_types.extend(rhs_types);
-                        lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                        lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                         let annotation = format!("({} {} {})", lhs_as_string, op, rhs_as_string);
                         (
                             rhs_counter_ret + 1,
@@ -313,12 +317,12 @@ impl<'a> OutputStreamVHDL<'a> {
                         let (rhs_counter_ret, rhs_types, rhs_res, rhs_as_string) =
                             self.generate_vhdl_expression(&operands[1], lhs_counter_ret);
                         lhs_types.extend(rhs_types);
-                        let float_ty = is_float_type(ty);
+                        let float_ty = is_float_type(&exp.ty);
                         match float_ty {
                             Some(size_ty) => {
                                 let (high, low) = get_float_range(size_ty);
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::FloatBounds(2 * high + 1, 2 * low)));
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::FloatBounds(2 * high + 1, 2 * low)));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 OutputStreamVHDL::generate_expression_with_cast(
                                     lhs_counter_ret,
                                     rhs_counter_ret,
@@ -333,8 +337,8 @@ impl<'a> OutputStreamVHDL<'a> {
                                 )
                             }
                             None => {
-                                lhs_types.push((get_larger_ty(ty), TemporaryTypeHelp::Type));
-                                lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                lhs_types.push((get_larger_ty(&exp.ty), TemporaryTypeHelp::Type));
+                                lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 let annotation = format!("({} {} {})", lhs_as_string, op, rhs_as_string);
                                 (
                                     rhs_counter_ret + 2,
@@ -353,7 +357,7 @@ impl<'a> OutputStreamVHDL<'a> {
                         let (rhs_counter_ret, rhs_types, rhs_res, rhs_as_string) =
                             self.generate_vhdl_expression(&operands[1], lhs_counter_ret);
                         lhs_types.extend(rhs_types);
-                        lhs_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                        lhs_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                         let annotation = format!("({} {} {})", lhs_as_string, op, rhs_as_string);
                         (
                             rhs_counter_ret + 1,
@@ -378,7 +382,9 @@ impl<'a> OutputStreamVHDL<'a> {
                 }
             }
 
-            Convert { from, to, expr } => {
+            Convert { expr } => {
+                let from = &expr.ty;
+                let to = &exp.ty;
                 let (arg_counter, mut temps_ty, arg_res, arg_as_string) = self.generate_vhdl_expression(expr, counter);
                 let (num_temps, arg) = match OutputStreamVHDL::get_convert_ty(from, to) {
                     ConvertType::ContOptional => return (arg_counter, temps_ty, arg_res, arg_as_string),
@@ -392,7 +398,7 @@ impl<'a> OutputStreamVHDL<'a> {
                             temps_ty.push((to.clone(), TemporaryTypeHelp::Type));
                             (
                                 2,
-                                if from_size > to_size {
+                                if from_ty_size > to_ty_size {
                                     OutputStreamVHDL::generate_higher_cast_statement(arg_counter, to_ty_size, to)
                                 } else {
                                     OutputStreamVHDL::generate_lower_cast_statement(arg_counter, from_ty_size, to)
@@ -410,7 +416,7 @@ impl<'a> OutputStreamVHDL<'a> {
                             temps_ty.push((to.clone(), TemporaryTypeHelp::Type));
                             (
                                 2,
-                                if from_size > to_size {
+                                if from_ty_size > to_ty_size {
                                     OutputStreamVHDL::generate_higher_cast_statement(arg_counter, to_ty_size, to)
                                 } else {
                                     OutputStreamVHDL::generate_lower_cast_statement(arg_counter, from_ty_size, to)
@@ -425,7 +431,8 @@ impl<'a> OutputStreamVHDL<'a> {
                         temps_ty.push((to.clone(), TemporaryTypeHelp::Type));
                         (
                             2,
-                            if from_ty_size == to_ty_size {
+                            match from_ty_size.cmp(&to_ty_size) {
+                                std::cmp::Ordering::Equal =>
                                 format!(
                                     "temp_{} := std_logic_vector(temp_{});\n{}temp_{} := unsigned(temp_{});",
                                     arg_counter,
@@ -433,10 +440,10 @@ impl<'a> OutputStreamVHDL<'a> {
                                     OFFSET,
                                     arg_counter + 1,
                                     arg_counter
-                                )
-                            } else if from_ty_size > to_ty_size {
-                                OutputStreamVHDL::generate_higher_cast_statement(arg_counter, to_ty_size, to)
-                            } else {
+                                ),
+                            std::cmp::Ordering::Greater =>
+                                OutputStreamVHDL::generate_higher_cast_statement(arg_counter, to_ty_size, to),
+                            std::cmp::Ordering::Less =>
                                 OutputStreamVHDL::generate_lower_cast_statement(arg_counter, from_ty_size, to)
                             },
                         )
@@ -448,20 +455,18 @@ impl<'a> OutputStreamVHDL<'a> {
                         temps_ty.push((to.clone(), TemporaryTypeHelp::Type));
                         (
                             2,
-                            if from_ty_size == to_ty_size {
-                                format!(
+                            match from_ty_size.cmp(&to_ty_size) {
+                                std::cmp::Ordering::Equal => format!(
                                     "temp_{} := std_logic_vector(temp_{});\n{}temp_{} := signed(temp_{});",
                                     arg_counter,
                                     arg_counter - 1,
                                     OFFSET,
                                     arg_counter + 1,
                                     arg_counter
-                                )
-                            } else if from_ty_size > to_ty_size {
-                                OutputStreamVHDL::generate_higher_cast_statement(arg_counter, to_ty_size, to)
-                            } else {
-                                OutputStreamVHDL::generate_lower_cast_statement(arg_counter, from_ty_size, to)
-                            },
+                                ),
+                                std::cmp::Ordering::Greater => OutputStreamVHDL::generate_higher_cast_statement(arg_counter, to_ty_size, to),
+                                std::cmp::Ordering::Less =>OutputStreamVHDL::generate_lower_cast_statement(arg_counter, from_ty_size, to)
+                            }
                         )
                     }
                     ConvertType::FloatToInt(_fl_ty, _int_ty) => {
@@ -571,14 +576,14 @@ impl<'a> OutputStreamVHDL<'a> {
                     annotation,
                 )
             }
-            Function(name, args, ty) => {
+            Function(name, args) => {
                 match name.as_str() {
                     "abs" => {
                         let (arg_counter_ret, mut arg_types, arg_res, arg_as_string) =
                             self.generate_vhdl_expression(&args[0], counter);
-                        match get_atomic_type(ty) {
+                        match get_atomic_type(&exp.ty) {
                             Type::Int(_) | Type::UInt(_) => {
-                                arg_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                arg_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 let annotation = format!("abs({})", arg_as_string);
                                 (
                                     arg_counter_ret + 1,
@@ -598,8 +603,8 @@ impl<'a> OutputStreamVHDL<'a> {
                             }
                             Type::Float(fl_ty) => {
                                 let (range_high, range_low) = get_float_range(fl_ty);
-                                arg_types.push((ty.clone(), TemporaryTypeHelp::FloatBounds(range_high + 1, range_low)));
-                                arg_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                arg_types.push((exp.ty.clone(), TemporaryTypeHelp::FloatBounds(range_high + 1, range_low)));
+                                arg_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 let annotation = format!("abs({})", arg_as_string);
                                 (
                                     arg_counter_ret + 2,
@@ -635,8 +640,8 @@ impl<'a> OutputStreamVHDL<'a> {
                         //arg_types.push((Type::UInt(get_UTypeSize_for_ty(argument_ty.clone())),true));
                         let annotation = format!("sqrt({})", arg_as_string);
                         match get_atomic_type(argument_ty) {
-                            Type::Int(IntTy::I32) | Type::UInt(UIntTy::U32) => {
-                                arg_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                            Type::Int(IntTy::Int32) | Type::UInt(UIntTy::UInt32) => {
+                                arg_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 (
                                     arg_counter_ret + 1,
                                     arg_types,
@@ -654,16 +659,10 @@ impl<'a> OutputStreamVHDL<'a> {
                                 )
                             }
                             Type::Float(fl_ty) => {
-                                arg_types.push((ty.clone(), TemporaryTypeHelp::Type));
+                                arg_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
                                 let size = match fl_ty {
-                                    FloatTy::F16 => {
-                                        println!(
-                                            "Warning: sqrt is only implemented for Float32 and is therefore casted!",
-                                        );
-                                        16
-                                    }
-                                    FloatTy::F32 => 32,
-                                    FloatTy::F64 => {
+                                    FloatTy::Float32 => 32,
+                                    FloatTy::Float64 => {
                                         println!(
                                             "Warning: sqrt is only implemented for Float32 and is therefore casted!",
                                         );
@@ -691,8 +690,8 @@ impl<'a> OutputStreamVHDL<'a> {
                                 println!(
                                     "Waring: sqrt function is only implemented for 32-bit Integer and 32-bit float in the FPGA compilation"
                                 );
-                                arg_types.push((ty.clone(), TemporaryTypeHelp::Type));
-                                unimplemented!("Type {} not implemented", ty)
+                                arg_types.push((exp.ty.clone(), TemporaryTypeHelp::Type));
+                                unimplemented!("Type {} not implemented", exp.ty)
                             }
                         }
                     }
@@ -728,19 +727,23 @@ impl<'a> OutputStreamVHDL<'a> {
             Default { expr, default } => {
                 //TODO ask if this check is needed
                 let name_valid = match expr.kind {
-                    OffsetLookup { target, offset } => {
-                        let stream = self.ir.get_name_for_stream_ref(target);
-                        let offset = get_offset_as_string(&offset);
-                        format!("{}_data_valid_{}", stream, offset)
+                    StreamAccess { target, parameters:_, access_kind } => {
+                        match access_kind {
+                            StreamAccessKind::Offset(offset) => {
+                                let stream = self.ir.get_name_for_stream_ref(target);
+                                let offset = get_offset_as_string(&StreamAccessKind::Offset(offset)).unwrap();
+                                format!("{}_data_valid_{}", stream, offset)
+                            }
+                            StreamAccessKind::Hold | StreamAccessKind::Sync => format!("{}_data_valid_0", self.ir.get_name_for_stream_ref(target)),
+                            StreamAccessKind::SlidingWindow(wr) => {let window = self.ir.sliding_window(wr);
+                                let in_stream = self.ir.get_name_for_stream_ref(window.target);
+                                let sw_ty = get_str_for_sw_op(window.op);
+                                format!("{}_{}_{}_sw_data_valid", in_stream, sw_ty, wr.idx())}
+                                _=>unimplemented!("The case {:?} of the default operator is not yet implemented", expr),
+                        }
                     }
-                    StreamAccess(sr, _) => format!("{}_data_valid_0", self.ir.get_name_for_stream_ref(sr)),
-                    WindowLookup(wr) => {
-                        let window = self.ir.get_window(wr);
-                        let in_stream = self.ir.get_name_for_stream_ref(window.target);
-                        let sw_ty = get_str_for_sw_op(window.op);
-                        format!("{}_{}_{}_sw_data_valid", in_stream, sw_ty, wr.idx())
-                    }
-                    _ => unimplemented!("The case {} of the default operator is not yet implemented", expr),
+
+                    _ => unimplemented!("The case {:?} of the default operator is not yet implemented", expr),
                 };
                 let (access_counter_ret, mut access_ty, access_res, access_as_string) =
                     self.generate_vhdl_expression(expr, counter);
@@ -768,7 +771,7 @@ impl<'a> OutputStreamVHDL<'a> {
                     annotation,
                 )
             }
-            Tuple(_) | TupleAccess(_, _) => unimplemented!("Tuples not implemented, yet"), // Should be implemented as arrays.
+            ParameterAccess(_, _) | Tuple(_) | TupleAccess(_, _) => unimplemented!("Tuples not implemented, yet"),
         }
     }
 
@@ -872,21 +875,21 @@ impl<'a> OutputStreamVHDL<'a> {
     pub(crate) fn generate_dependencies_in_expr(expr: &Expression) -> Vec<StreamReference> {
         match &expr.kind {
             ExpressionKind::LoadConstant(_) => Vec::new(),
-            ExpressionKind::ArithLog(_op, args, _ty) => OutputStreamVHDL::generate_dependencies_in_expr_over_args(args),
-            ExpressionKind::OffsetLookup { target, .. } => vec![*target],
-            ExpressionKind::StreamAccess(stream_ref, access_kind) => match access_kind {
-                StreamAccessKind::Sync => vec![*stream_ref],
-                StreamAccessKind::Hold => Vec::new(),
-                StreamAccessKind::Optional => unimplemented!(),
+            ExpressionKind::ArithLog(_op, args) => OutputStreamVHDL::generate_dependencies_in_expr_over_args(args),
+            ExpressionKind::StreamAccess { target, parameters:_, access_kind } => match access_kind {
+                StreamAccessKind::Hold | StreamAccessKind::Sync | StreamAccessKind::Offset(_) => vec![*target],
+
+                StreamAccessKind::SlidingWindow(_) => Vec::new(),
+                StreamAccessKind::InstanceAggregation(_)
+                | StreamAccessKind::DiscreteWindow(_)
+                | StreamAccessKind::Get
+                | StreamAccessKind::Fresh => unimplemented!(),
             },
-            ExpressionKind::WindowLookup(_window_ref) => Vec::new(),
             ExpressionKind::Ite { condition, consequence, alternative } => {
                 let args = vec![*condition.clone(), *consequence.clone(), *alternative.clone()];
                 OutputStreamVHDL::generate_dependencies_in_expr_over_args(&args)
             }
-            ExpressionKind::Function(_name, args, _ty) => {
-                OutputStreamVHDL::generate_dependencies_in_expr_over_args(args)
-            }
+            ExpressionKind::Function(_name, args) => OutputStreamVHDL::generate_dependencies_in_expr_over_args(args),
             ExpressionKind::Convert { expr, .. } => OutputStreamVHDL::generate_dependencies_in_expr(expr),
             ExpressionKind::Default { expr, default } => {
                 let args = vec![*expr.clone(), *default.clone()];
@@ -930,35 +933,34 @@ pub(crate) enum ConvertType {
 }
 
 //--------------------Entity Header-----------------------------------------------------------------
-impl<'a> OutputStreamVHDL<'a> {
+impl OutputStreamVHDL<'_> {
     pub(crate) fn generate_vhdl_dependencies(&self, declaration: bool) -> String {
-        let dependencies_streams: Vec<String> = self.output.outgoing_dependencies
+        let dependencies_streams: Vec<String> = self.output.accesses
             .iter()
-            .map(|cur| {
-                let name = self.ir.get_name_for_stream_ref(cur.stream);
-                let ty = get_vhdl_type(&self.ir.get_ty_for_stream_ref(cur.stream));
+            .map(|(stream, accesses)| {
+                let name = self.ir.get_name_for_stream_ref(*stream);
+                let ty = get_vhdl_type(self.ir.get_ty_for_stream_ref(*stream));
                 let mut considered_offsets = Vec::new();
-                let dep_strings: Vec<String> = cur
-                    .offsets
+                let dep_strings: Vec<String> = accesses
                     .iter()
-                    .map(|cur| {
-                        if considered_offsets.iter().any(|cur_off| *cur_off==*cur) {
-                            "".to_string()
+                    .filter_map(|(_, kind)| {
+                        if considered_offsets.iter().any(|cur_off| *cur_off==*kind) {
+                            Some("".to_string())
                         } else {
-                            considered_offsets.push(*cur);
-                            let offset = get_offset_as_string(cur);
+                            considered_offsets.push(*kind);
+                            get_offset_as_string(kind).map(|offset| 
                             if declaration {
                                 format!(
                                     "\n\t\t\t{}_{} : in {};\n\t\t\t{}_data_valid_{} : in std_logic;",
                                     name, offset, ty, name, offset
                                 )
                             } else {
-                                let offset_as_number = get_offset_as_number(cur);
+                                let offset_as_number = get_offset_as_number(kind).unwrap();
                                 format!(
                                     "\n\t\t\t{}_{} => {}_entity_data_{},\n\t\t\t{}_data_valid_{} => {}_entity_data_valid_{},",
                                     name, offset, name, offset_as_number, name, offset, name, offset_as_number
                                 )
-                            }
+                            })
                         }
 
                     })
@@ -968,10 +970,10 @@ impl<'a> OutputStreamVHDL<'a> {
             .collect();
         let dependencies_windows: Vec<String> = self
             .ir
-            .get_used_windows_in_expr(&self.output.expr)
+            .get_used_windows_in_expr(&self.output.eval.clauses[0].expression)
             .iter()
             .map(|cur| {
-                let window = self.ir.get_window(*cur);
+                let window = self.ir.sliding_window(*cur);
                 let in_stream = self.ir.get_name_for_stream_ref(window.target);
                 let sw_ty = get_str_for_sw_op(window.op);
                 let ty = get_vhdl_type(&window.ty);
@@ -996,24 +998,34 @@ impl<'a> OutputStreamVHDL<'a> {
     pub(crate) fn generate_output_dependencies_annotations(&self) -> String {
         let dependencies_streams: Vec<String> = self
             .output
-            .outgoing_dependencies
+            .accesses
             .iter()
-            .map(|cur| {
-                let name = self.ir.get_name_for_stream_ref(cur.stream);
-                let stream_type = self.ir.get_ty_for_stream_ref(cur.stream);
+            .map(|(stream, accesses)| {
+                let name = self.ir.get_name_for_stream_ref(*stream);
+                let stream_type = self.ir.get_ty_for_stream_ref(*stream);
                 let mut deps: String = String::new();
                 let mut first = true;
-                cur.offsets.iter().for_each(|cur_off| {
-                    let off_as_string = match cur_off {
-                        Offset::PastDiscreteOffset(off) => {
-                            if *off != 0 {
-                                format!("-{}", off)
-                            } else {
-                                off.to_string()
+                accesses.iter().for_each(|(_, kind)| {
+                    let off_as_string = match kind {
+                        StreamAccessKind::Sync => "0".to_string(),
+                        StreamAccessKind::SlidingWindow(window_reference) => format!("window {window_reference}"),
+                        StreamAccessKind::Hold => "0".to_string(),
+                        StreamAccessKind::Offset(offset) => match offset {
+                            Offset::Past(off) => {
+                                if *off != 0 {
+                                    format!("-{}", off)
+                                } else {
+                                    off.to_string()
+                                }
                             }
+                            Offset::Future(off) => off.to_string(),
+                        },
+                        StreamAccessKind::Get
+                        | StreamAccessKind::Fresh
+                        | StreamAccessKind::InstanceAggregation(_)
+                        | StreamAccessKind::DiscreteWindow(_) => {
+                            unimplemented!()
                         }
-                        Offset::FutureDiscreteOffset(off) => off.to_string(),
-                        _ => unimplemented!(),
                     };
                     if first {
                         first = false;
@@ -1027,10 +1039,10 @@ impl<'a> OutputStreamVHDL<'a> {
             .collect();
         let dependencies_windows: Vec<String> = self
             .ir
-            .get_used_windows_in_expr(&self.output.expr)
+            .get_used_windows_in_expr(&self.output.eval.clauses[0].expression)
             .iter()
             .map(|cur| {
-                let window = self.ir.get_window(*cur);
+                let window = self.ir.sliding_window(*cur);
                 let in_stream = self.ir.get_name_for_stream_ref(window.target);
                 let sw_ty = get_str_for_sw_op(window.op);
                 format!(
@@ -1060,7 +1072,7 @@ impl<'a> OutputStreamVHDL<'a> {
 //--------------------Helper Functions--------------------------------------------------------------
 
 fn get_str_for_arith_op(op: ArithLogOp) -> String {
-    use rtlola_frontend::ir::ArithLogOp::*;
+    use rtlola_frontend::mir::ArithLogOp::*;
     match op {
         Add => "+",
         Sub => "-",
@@ -1083,19 +1095,39 @@ fn get_str_for_arith_op(op: ArithLogOp) -> String {
     .to_string()
 }
 
-fn get_offset_as_string(offset: &Offset) -> String {
+fn get_offset_as_string(offset: &StreamAccessKind) -> Option<String> {
     match offset {
-        Offset::PastDiscreteOffset(0) => "0".to_string(),
-        Offset::PastDiscreteOffset(of) => format!("neg{}", of),
-        _ => unimplemented!(),
+        StreamAccessKind::Sync | StreamAccessKind::Hold => Some("0".to_string()),
+        StreamAccessKind::SlidingWindow(_) => None,
+        StreamAccessKind::Offset(offset) => Some(match offset {
+            Offset::Past(0) => "0".to_string(),
+            Offset::Past(of) => format!("neg{}", of),
+            _ => unimplemented!(),
+        }),
+        StreamAccessKind::Get
+        | StreamAccessKind::Fresh
+        | StreamAccessKind::InstanceAggregation(_)
+        | StreamAccessKind::DiscreteWindow(_) => {
+            unimplemented!()
+        }
     }
 }
 
-fn get_offset_as_number(offset: &Offset) -> String {
+fn get_offset_as_number(offset: &StreamAccessKind) -> Option<String> {
     match offset {
-        Offset::PastDiscreteOffset(0) => "0".to_string(),
-        Offset::PastDiscreteOffset(of) => format!("{}", of),
-        _ => unimplemented!(),
+        StreamAccessKind::Sync | StreamAccessKind::Hold => Some("0".to_string()),
+        StreamAccessKind::SlidingWindow(_) => None,
+        StreamAccessKind::Offset(offset) => Some(match offset {
+            Offset::Past(0) => "0".to_string(),
+            Offset::Past(of) => format!("{}", of),
+            _ => unimplemented!(),
+        }),
+        StreamAccessKind::Get
+        | StreamAccessKind::Fresh
+        | StreamAccessKind::InstanceAggregation(_)
+        | StreamAccessKind::DiscreteWindow(_) => {
+            unimplemented!()
+        }
     }
 }
 
@@ -1115,7 +1147,7 @@ pub(crate) fn get_str_for_sw_op(op: WindowOperation) -> String {
 fn get_atomic_type(ty: &Type) -> Type {
     match ty {
         Type::Bool | Type::Float(_) | Type::UInt(_) | Type::Int(_) | Type::String => ty.clone(),
-        Type::Function(_args, ret) => get_atomic_type(ret),
+        Type::Function { args: _, ret } => get_atomic_type(ret),
         Type::Option(op_ty) => get_atomic_type(op_ty),
         _ => unimplemented!(),
     }

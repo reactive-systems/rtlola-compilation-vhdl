@@ -8,6 +8,9 @@ use work.array_type_pkg.all;
 --* input a : Int32
 --* Input Dependencies:
 --* Stream Lookups:
+--* - s_s: 
+--* - c_s: 
+--* - av_s: 
 --* - a_u: 0
 --* Window Lookups:
 --* - s_s: (0.3, sum)

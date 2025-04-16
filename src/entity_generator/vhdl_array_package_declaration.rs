@@ -1,6 +1,6 @@
 use crate::entity_generator::GenerateVhdlCode;
 use crate::static_constants::serialize_bit_range_representation;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::ser::{Serialize, Serializer};
 
 /// This struct generates the array package in VHDL from the my_array_package template.
 /// This package builds for every datatype in RTLola, a corresponding array type that is mostly used
@@ -9,7 +9,6 @@ use serde::ser::{Serialize, SerializeStruct, Serializer};
 ///
 /// The serializer fills the gaps for the float arrays (16/32/64 bits) to bound the integer and
 /// fraction bits to the constants defined in static_constants.rs.
-
 pub(crate) struct ArrayPackageVHDL {}
 
 impl ArrayPackageVHDL {
@@ -27,7 +26,7 @@ impl GenerateVhdlCode for ArrayPackageVHDL {
     }
 }
 
-impl<'a> Serialize for ArrayPackageVHDL {
+impl Serialize for ArrayPackageVHDL {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -41,7 +40,7 @@ mod package_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
     #[test]
     fn generate_entity() {

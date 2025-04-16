@@ -1,6 +1,5 @@
 use crate::entity_generator::GenerateVhdlCode;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
-use std::time::Duration;
+use serde::Serialize;
 
 #[derive(Serialize)]
 pub(crate) struct TimeUnitOffline {}
@@ -25,7 +24,7 @@ mod time_unit_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
     #[test]
     fn generate_entity() {

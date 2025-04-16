@@ -11,17 +11,17 @@ use work.my_math_pkg.all;
 --* Storage Requirement: 0
 --* Output Dependencies:
 --* Stream Lookups
---* - b of Type Float32: 0
 --* - a of Type Float32: 0
+--* - b of Type Float32: 0
 
 
 entity plus_op_output_stream_entity is 
 	port (
 		clk, pe, eval, rst : in std_logic;
-			b_0 : in sfixed(8 downto -23);
-			b_data_valid_0 : in std_logic;
 			a_0 : in sfixed(8 downto -23);
 			a_data_valid_0 : in std_logic;
+			b_0 : in sfixed(8 downto -23);
+			b_data_valid_0 : in std_logic;
 		data_out : out sfixed32_array(0 downto 0);
 		data_valid_out : out bit_array(0 downto 0);
 		pe_done_out : out std_logic;

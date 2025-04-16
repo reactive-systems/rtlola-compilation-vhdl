@@ -5,17 +5,11 @@ use crate::entity_generator::{GenerateVhdlCode, VHDLGenerator};
 use crate::ir_extension::ExtendedRTLolaIR;
 use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-use std::path::Prefix::Verbatim;
-
-use rtlola_frontend::ir::ExpressionKind::OffsetLookup;
 use tera::Tera;
-//use core::num::flt2dec::strategy::grisu::format_exact;
 
-pub(crate) mod counter_component;
-pub(crate) mod counter_entity;
 pub(crate) mod input_stream_component;
 pub(crate) mod input_stream_monitor_entity;
 pub(crate) mod output_stream_component;
@@ -24,18 +18,18 @@ pub(crate) mod sliding_window_monitor_entity;
 pub(crate) mod sliding_window_stream_component;
 
 pub(crate) struct Evaluator<'a> {
-    pub(crate) ir: &'a RTLolaIR,
+    pub(crate) ir: &'a RtLolaMir,
     pub(crate) tera_files: String,
 }
 
 impl<'a> Evaluator<'a> {
-    pub(crate) fn new(ir: &'a RTLolaIR, tera_files: String) -> Evaluator {
+    pub(crate) fn new(ir: &'a RtLolaMir, tera_files: String) -> Evaluator<'a> {
         let tera_files = tera_files + "/low_level_controller/components_and_entities/*";
         Evaluator { ir, tera_files }
     }
 }
 
-impl<'a> GenerateVhdlCode for Evaluator<'a> {
+impl GenerateVhdlCode for Evaluator<'_> {
     fn template_name(&self) -> String {
         "evaluator.tmpl".to_string()
     }
@@ -45,7 +39,7 @@ impl<'a> GenerateVhdlCode for Evaluator<'a> {
     }
 }
 
-impl<'a> Serialize for Evaluator<'a> {
+impl Serialize for Evaluator<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -110,7 +104,7 @@ pub(crate) struct EvaluatorSetup {
     pub(crate) print_sliding_windows: Vec<String>,
 }
 
-impl<'a> EvaluatorSetup {
+impl EvaluatorSetup {
     fn new() -> EvaluatorSetup {
         EvaluatorSetup {
             inputs: Vec::new(),
@@ -138,10 +132,10 @@ impl<'a> EvaluatorSetup {
     }
 }
 
-impl<'a> Evaluator<'a> {
+impl Evaluator<'_> {
     fn generate_evaluator_setup(&self) -> EvaluatorSetup {
         let mut setup = EvaluatorSetup::new();
-        let tera: Tera = compile_templates!(&self.tera_files);
+        let tera: Tera = tera::compile_templates!(&self.tera_files);
         self.ir.inputs.iter().for_each(|cur| {
             let annotation = format!("input {} : {}", cur.name, cur.ty);
             if cur.name.as_str() != "time" {
@@ -189,7 +183,7 @@ impl<'a> Evaluator<'a> {
             let annotation = format!("output {} := {}", cur.name, expr_as_string);
             setup.inputs.push(format!("\n\t\t{}_en : in std_logic;", cur.name));
             setup.outputs.push(format!("\n\t\t{} : out {};", cur.name, get_vhdl_type(&cur.ty)));
-            let cur_output = OutputStreamVHDL::new(cur, &self.ir);
+            let cur_output = OutputStreamVHDL::new(cur, self.ir);
             setup.component_declaration.push(
                 format!(
                     "\t--* {}\n{}",
@@ -224,9 +218,9 @@ impl<'a> Evaluator<'a> {
                     "\n\t\t\t\t\t{}_pe <= {}_en;",
                     cur.name,
                     cur.name,));
-            let sw_dependencies = self.ir.get_used_windows_in_expr(&cur.expr);
+            let sw_dependencies = self.ir.get_used_windows_in_expr(&cur.eval.clauses[0].expression);
             sw_dependencies.iter().for_each(|cur_window| {
-                let window = self.ir.get_window(*cur_window);
+                let window = self.ir.sliding_window(*cur_window);
                 let sw_target = self.ir.get_name_for_stream_ref(window.target);
                 let sw_window_ty = get_str_for_sw_op(window.op);
                 let window_name = format!("{}_{}_{}", sw_target, sw_window_ty, cur_window.idx());
@@ -243,12 +237,11 @@ impl<'a> Evaluator<'a> {
                     .eval_done_port_assignment
                     .push(format!(" and (not {}_en or {}_request_done)", cur.name, window_name));
             });
-            let stream_dependencies_from_expr = OutputStreamVHDL::generate_dependencies_in_expr(&cur.expr);
-            let stream_dependencies = &cur.outgoing_dependencies;
-            let no_zero_offset = ! stream_dependencies.iter().any(|cur| {
-                self.ir.is_output_reference(cur.stream) &&
-                    cur.offsets.iter().any(|cur|*cur == Offset::PastDiscreteOffset(0)
-                    )} && stream_dependencies_from_expr.iter().any(|cur_in_expr| *cur_in_expr == cur.stream));
+            let stream_dependencies_from_expr = OutputStreamVHDL::generate_dependencies_in_expr(&cur.eval.clauses[0].expression);
+            let no_zero_offset = ! cur.accesses.iter().any(|(stream, accesses)| {
+                self.ir.is_output_reference(*stream) &&
+                    accesses.iter().any(|(_,cur)|*cur == StreamAccessKind::Offset( Offset::Past(0)) || *cur == StreamAccessKind::Sync
+                    )} && stream_dependencies_from_expr.iter().any(|cur_in_expr| *cur_in_expr == *stream));
             let pre_annotation = format!("\n\t\t\t\t\t--* {}\n\t\t\t\t\t--* Evaluation Phase of Output Stream {} is Influenced by", annotation, cur.name);
             if sw_dependencies.is_empty() && no_zero_offset {
                 setup.eval_signal_assignments.push(format!(
@@ -260,7 +253,7 @@ impl<'a> Evaluator<'a> {
                 let mut sw_dep_vhdl = Vec::new();
                 let mut sw_dep_string = Vec::new();
                 sw_dependencies.iter().for_each(|cur_window|{
-                    let window = self.ir.get_window(*cur_window);
+                    let window = self.ir.sliding_window(*cur_window);
                     let sw_target = self.ir.get_name_for_stream_ref(window.target);
                     let sw_window_ty = get_str_for_sw_op(window.op);
                     let window_name = format!("{}_{}_{}", sw_target, sw_window_ty, cur_window.idx());
@@ -269,24 +262,24 @@ impl<'a> Evaluator<'a> {
                 });
                 let mut stream_dep_vhdl = Vec::new();
                 let mut stream_dep_string = Vec::new();
-                stream_dependencies.iter().for_each(|cur_dep| {
-                    let has_zero_offset = cur_dep.offsets.iter().any(|cur| *cur == Offset::PastDiscreteOffset(0));
-                    match cur_dep.stream {
-                        StreamReference::OutRef(_) => {
-                            let is_not_hold = stream_dependencies_from_expr.iter().any(|cur| *cur == cur_dep.stream);
+                cur.accesses.iter().for_each(|(stream, accesses)| {
+                    let has_zero_offset = accesses.iter().any(|(_, cur)| *cur == StreamAccessKind::Hold || *cur == StreamAccessKind::Sync || *cur == StreamAccessKind::Offset( Offset::Past(0)));
+                    match stream {
+                        StreamReference::Out(_) => {
+                            let is_not_hold = stream_dependencies_from_expr.iter().any(|cur| *cur == *stream);
                             if has_zero_offset {
                                 if is_not_hold {
-                                    let stream = self.ir.get_name_for_stream_ref(cur_dep.stream);
+                                    let stream = self.ir.stream(*stream).name();
                                     stream_dep_vhdl.push(format!(" and {}_eval_done", stream));
                                     stream_dep_string.push(format!("\n\t\t\t\t\t--* - Synchronous Lookup: {}", stream));
                                 } else {
-                                    let stream = self.ir.get_name_for_stream_ref(cur_dep.stream);
+                                    let stream = self.ir.stream(*stream).name();
                                     stream_dep_vhdl.push(format!(" and (not {}_en or {}_eval_done)", stream, stream));
                                     stream_dep_string.push(format!("\n\t\t\t\t\t--* - Sample & Hold Lookup: {}", stream));
                                 }
                             }
                         }
-                        StreamReference::InRef(_) => {}
+                        StreamReference::In(_) => {}
                     }
                 });
                 setup.eval_signal_assignments.push(format!(
@@ -356,12 +349,12 @@ impl<'a> Evaluator<'a> {
 mod monitor_test {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]

@@ -83,10 +83,10 @@ architecture mixed of evaluator is
     component plus_op_output_stream_entity
 	    port (
 		    clk, pe, eval, rst : in std_logic;
-			b_0 : in sfixed(8 downto -23);
-			b_data_valid_0 : in std_logic;
 			a_0 : in sfixed(8 downto -23);
 			a_data_valid_0 : in std_logic;
+			b_0 : in sfixed(8 downto -23);
+			b_data_valid_0 : in std_logic;
 		    data_out : out sfixed32_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -113,10 +113,10 @@ architecture mixed of evaluator is
     component mult_op_output_stream_entity
 	    port (
 		    clk, pe, eval, rst : in std_logic;
-			b_0 : in sfixed(8 downto -23);
-			b_data_valid_0 : in std_logic;
 			a_0 : in sfixed(8 downto -23);
 			a_data_valid_0 : in std_logic;
+			b_0 : in sfixed(8 downto -23);
+			b_data_valid_0 : in std_logic;
 		    data_out : out sfixed32_array(0 downto 0);
 		    data_valid_out : out bit_array(0 downto 0);
 		    pe_done_out : out std_logic;
@@ -266,10 +266,10 @@ begin
             rst => rst,
             pe => plus_op_pe,
             eval => plus_op_eval,
-			b_0 => b_entity_data_0,
-			b_data_valid_0 => b_entity_data_valid_0,
 			a_0 => a_entity_data_0,
 			a_data_valid_0 => a_entity_data_valid_0,
+			b_0 => b_entity_data_0,
+			b_data_valid_0 => b_entity_data_valid_0,
 			data_out(0) => plus_op_entity_data_0,
 			data_valid_out(0) => plus_op_entity_data_valid_0,
             pe_done_out => plus_op_pe_done,
@@ -300,10 +300,10 @@ begin
             rst => rst,
             pe => mult_op_pe,
             eval => mult_op_eval,
-			b_0 => b_entity_data_0,
-			b_data_valid_0 => b_entity_data_valid_0,
 			a_0 => a_entity_data_0,
 			a_data_valid_0 => a_entity_data_valid_0,
+			b_0 => b_entity_data_0,
+			b_data_valid_0 => b_entity_data_valid_0,
 			data_out(0) => mult_op_entity_data_0,
 			data_valid_out(0) => mult_op_entity_data_valid_0,
             pe_done_out => mult_op_pe_done,

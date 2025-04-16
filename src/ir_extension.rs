@@ -1,9 +1,11 @@
 use crate::vhdl_wrapper::expression_and_statement_serialize::get_str_for_sw_op;
-use rtlola_frontend::ir::{
-    Expression, ExpressionKind, Offset, OutputReference, OutputStream, RTLolaIR, SlidingWindow, StreamReference, Type,
-    WindowReference,
+use rtlola_frontend::{
+    mir::{
+        Expression, ExpressionKind, Offset, OutputStream, SlidingWindow, StreamAccessKind, StreamReference, Type,
+        WindowReference,
+    },
+    RtLolaMir,
 };
-use std::collections::HashMap;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -27,79 +29,57 @@ pub(crate) struct InputWindowDependency {
 pub(crate) trait ExtendedRTLolaIR {
     fn get_name_for_stream_ref(&self, stream_ref: StreamReference) -> &str;
     fn get_ty_for_stream_ref(&self, stream_ref: StreamReference) -> &Type;
-    fn get_ty_for_temporary_in_stream(&self, sr: StreamReference) -> &Type;
     fn is_output_reference(&self, sr: StreamReference) -> bool;
-    fn get_output_reference(&self, sr: StreamReference) -> OutputReference;
     fn get_used_windows_in_stream(&self, stream: &OutputStream) -> Vec<WindowReference>;
     fn get_used_windows_in_expr(&self, expr: &Expression) -> Vec<WindowReference>;
     fn get_streams_where_window_is_used(&self, windows: &SlidingWindow) -> Vec<StreamReference>;
     fn get_duration_for_stream(&self, s: StreamReference) -> Option<Duration>;
-    fn get_num_buckets(&self, sw: &SlidingWindow) -> u16;
+    fn get_num_buckets(&self, sw: &SlidingWindow) -> u32;
     fn get_input_offset_dependencies_for_stream(&self, sr: StreamReference) -> Vec<InputOffsetDependency>;
     fn get_input_window_dependencies_for_stream(&self, sr: StreamReference) -> Vec<InputWindowDependency>;
     fn get_input_dependencies_for_stream(&self, sr: StreamReference) -> InputDependency;
     fn get_input_dependencies_for_stream_as_annotation(&self, sr: StreamReference) -> String;
-    //    fn get_input_window_dependencies_for_stream_as_annotation(&self, win: Vec<WindowReference>) -> String;
 }
 
-impl ExtendedRTLolaIR for RTLolaIR {
+impl ExtendedRTLolaIR for RtLolaMir {
     fn get_name_for_stream_ref(&self, stream_ref: StreamReference) -> &str {
-        match stream_ref {
-            StreamReference::InRef(_) => &self.get_in(stream_ref).name,
-            StreamReference::OutRef(_) => &self.get_out(stream_ref).name,
-        }
-        .as_str()
+        self.stream(stream_ref).name()
     }
 
     fn get_ty_for_stream_ref(&self, stream_ref: StreamReference) -> &Type {
-        match stream_ref {
-            StreamReference::InRef(_) => &self.get_in(stream_ref).ty,
-            StreamReference::OutRef(_) => &self.get_out(stream_ref).ty,
-        }
-    }
-
-    fn get_ty_for_temporary_in_stream(&self, _sr: StreamReference) -> &Type {
-        // TODO
-        unimplemented!("Adapt to new lowering!")
-        //        match sr {
-        //            StreamReference::InRef(_) => panic!("method can be called on output streams"),
-        //            StreamReference::OutRef(_) => self
-        //                .get_out(sr)
-        //                .expr
-        //                .temporaries
-        //                .get(temp.0)
-        //                .unwrap_or_else(|| panic!("temporary {} should be contained in Stream {:?}", temp.0, sr)),
-        //        }
+        self.stream(stream_ref).ty()
     }
 
     fn is_output_reference(&self, sr: StreamReference) -> bool {
         match sr {
-            StreamReference::InRef(_) => false,
-            StreamReference::OutRef(_) => true,
-        }
-    }
-
-    fn get_output_reference(&self, sr: StreamReference) -> OutputReference {
-        match sr {
-            StreamReference::InRef(_) => panic!("Error in Analysis!"),
-            StreamReference::OutRef(reference) => reference,
+            StreamReference::In(_) => false,
+            StreamReference::Out(_) => true,
         }
     }
 
     fn get_used_windows_in_stream(&self, stream: &OutputStream) -> Vec<WindowReference> {
-        self.get_used_windows_in_expr(&stream.expr)
+        self.get_used_windows_in_expr(&stream.eval.clauses[0].expression)
     }
 
     fn get_used_windows_in_expr(&self, expr: &Expression) -> Vec<WindowReference> {
         use ExpressionKind::*;
         match &expr.kind {
-            LoadConstant(_) | OffsetLookup { .. } | StreamAccess(_, _) => Vec::new(),
-            ArithLog(_, operands, _) => {
+            LoadConstant(_) => Vec::new(),
+            ArithLog(_, operands) => {
                 let mut res = Vec::new();
                 operands.iter().for_each(|cur| res.extend(self.get_used_windows_in_expr(cur)));
                 res
             }
-            WindowLookup(window_ref) => vec![*window_ref],
+            StreamAccess { target: _, parameters: _, access_kind } => match access_kind {
+                StreamAccessKind::DiscreteWindow(window_reference)
+                | StreamAccessKind::SlidingWindow(window_reference)
+                | StreamAccessKind::InstanceAggregation(window_reference) => vec![*window_reference],
+                StreamAccessKind::Sync
+                | StreamAccessKind::Hold
+                | StreamAccessKind::Offset(_)
+                | StreamAccessKind::Get
+                | StreamAccessKind::Fresh => Vec::new(),
+            },
             Ite { condition, consequence, alternative, .. } => {
                 let mut res = self.get_used_windows_in_expr(condition);
                 res.extend(self.get_used_windows_in_expr(consequence));
@@ -112,7 +92,7 @@ impl ExtendedRTLolaIR for RTLolaIR {
                 res
             }
             TupleAccess(tuple, _) => self.get_used_windows_in_expr(tuple),
-            Function(_, args, _) => {
+            Function(_, args) => {
                 let mut res = Vec::new();
                 args.iter().for_each(|cur| res.extend(self.get_used_windows_in_expr(cur)));
                 res
@@ -123,12 +103,13 @@ impl ExtendedRTLolaIR for RTLolaIR {
                 res.extend(self.get_used_windows_in_expr(default));
                 res
             }
+            ParameterAccess(_, _) => unimplemented!(),
         }
     }
 
     fn get_streams_where_window_is_used(&self, window: &SlidingWindow) -> Vec<StreamReference> {
         let mut res = Vec::new();
-        for s in self.get_time_driven() {
+        for s in self.all_time_driven() {
             let used_sws = self.get_used_windows_in_stream(s);
             if used_sws.contains(&window.reference) {
                 res.push(s.reference)
@@ -140,25 +121,36 @@ impl ExtendedRTLolaIR for RTLolaIR {
     fn get_duration_for_stream(&self, s: StreamReference) -> Option<Duration> {
         for ts in &self.time_driven {
             if ts.reference == s {
-                return Some(ts.extend_rate);
+                return Some(ts.period_in_duration());
             }
         }
         None
     }
 
-    fn get_num_buckets(&self, sw: &SlidingWindow) -> u16 {
+    fn get_num_buckets(&self, sw: &SlidingWindow) -> u32 {
         let streams_where_window_is_used = &self.get_streams_where_window_is_used(sw);
         assert_eq!(streams_where_window_is_used.len(), 1, "not implemented, when window is used more than one time");
         let extend_rate = &self.get_duration_for_stream(streams_where_window_is_used[0]).expect("Should not happen");
-        (sw.duration.as_nanos() / extend_rate.as_nanos()) as u16
+        (sw.duration.as_nanos() / extend_rate.as_nanos()) as u32
     }
 
     fn get_input_offset_dependencies_for_stream(&self, sr: StreamReference) -> Vec<InputOffsetDependency> {
         let mut res = Vec::new();
         self.outputs.iter().for_each(|cur_output| {
-            cur_output.outgoing_dependencies.iter().for_each(|cur_dep| {
-                if cur_dep.stream == sr {
-                    res.push(InputOffsetDependency { stream: cur_output.reference, offsets: cur_dep.clone().offsets });
+            cur_output.accesses.iter().for_each(|(cur_dep, accesses)| {
+                if *cur_dep == sr {
+                    let offsets = accesses
+                        .iter()
+                        .flat_map(|(_, offsets)| match offsets {
+                            StreamAccessKind::Sync | StreamAccessKind::Hold => Some(Offset::Past(0)),
+                            StreamAccessKind::DiscreteWindow(_) | StreamAccessKind::SlidingWindow(_) => None,
+                            StreamAccessKind::Offset(offset) => Some(*offset),
+                            StreamAccessKind::InstanceAggregation(_)
+                            | StreamAccessKind::Get
+                            | StreamAccessKind::Fresh => unimplemented!(),
+                        })
+                        .collect();
+                    res.push(InputOffsetDependency { stream: cur_output.reference, offsets });
                 }
             })
         });
@@ -168,8 +160,8 @@ impl ExtendedRTLolaIR for RTLolaIR {
     fn get_input_window_dependencies_for_stream(&self, sr: StreamReference) -> Vec<InputWindowDependency> {
         let mut res = Vec::new();
         self.outputs.iter().for_each(|cur_output| {
-            self.get_used_windows_in_expr(&cur_output.expr).iter().for_each(|cur_win| {
-                let window = self.get_window(*cur_win);
+            self.get_used_windows_in_expr(&cur_output.eval.clauses[0].expression).iter().for_each(|cur_win| {
+                let window = self.sliding_window(*cur_win);
                 if window.target == sr {
                     res.push(InputWindowDependency { stream: cur_output.reference, window: *cur_win });
                 }
@@ -198,15 +190,14 @@ impl ExtendedRTLolaIR for RTLolaIR {
                         let comma = if first { "" } else { ", " };
                         first = false;
                         match cur_offset {
-                            Offset::FutureDiscreteOffset(off) => format!("{}{}", comma, off),
-                            Offset::PastDiscreteOffset(off) => {
+                            Offset::Future(off) => format!("{}{}", comma, off),
+                            Offset::Past(off) => {
                                 if *off != 0 {
                                     format!("{}-{}", comma, off)
                                 } else {
                                     format!("{}{}", comma, off)
                                 }
                             }
-                            _ => unimplemented!(),
                         }
                     })
                     .collect();
@@ -217,7 +208,7 @@ impl ExtendedRTLolaIR for RTLolaIR {
             .windows
             .iter()
             .map(|cur_input_dep| {
-                let window = self.get_window(cur_input_dep.window);
+                let window = self.sliding_window(cur_input_dep.window);
                 format!(
                     "--* - {}: ({}, {})\n",
                     self.get_name_for_stream_ref(cur_input_dep.stream),

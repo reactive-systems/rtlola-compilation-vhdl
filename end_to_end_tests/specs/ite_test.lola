@@ -2,8 +2,8 @@ input a : Int8
 input b : Int16
 input val : Bool
 
-output c : UInt8 := cast(b)
-output d : Int16 := if val then cast(a)+b else cast(a)*b
-output e : Int8 := if b<3 then (if val then a else cast(b)) + 4 else cast(b)
+output c : UInt8 := cast<Int16, UInt8>(b)
+output d : Int16 := if val then cast<Int8, Int16>(a)+b else cast<Int8, Int16>(a)*b
+output e : Int8 := if b<3 then (if val then a else cast<Int16, Int8>(b)) + 4 else cast<Int16, Int8>(b)
 output counter @1Hz := counter.offset(by:-1).defaults(to:0) + 1
 

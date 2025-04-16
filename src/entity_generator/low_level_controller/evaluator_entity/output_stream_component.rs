@@ -1,8 +1,7 @@
 use crate::entity_generator::low_level_controller::output_entity::OutputStreamVHDL;
 use crate::entity_generator::GenerateVhdlCode;
-use crate::vhdl_wrapper::expression_and_statement_serialize::*;
 use crate::vhdl_wrapper::type_serialize::*;
-use rtlola_frontend::ir::*;
+use rtlola_frontend::mir::*;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 pub(crate) struct OutputStreamComponent<'a> {
@@ -15,7 +14,7 @@ impl<'a> OutputStreamComponent<'a> {
     }
 }
 
-impl<'a> GenerateVhdlCode for OutputStreamComponent<'a> {
+impl GenerateVhdlCode for OutputStreamComponent<'_> {
     fn template_name(&self) -> String {
         "output_stream_component.tmpl".to_string()
     }
@@ -25,7 +24,7 @@ impl<'a> GenerateVhdlCode for OutputStreamComponent<'a> {
     }
 }
 
-impl<'a> Serialize for OutputStreamComponent<'a> {
+impl Serialize for OutputStreamComponent<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -50,12 +49,12 @@ impl<'a> Serialize for OutputStreamComponent<'a> {
 mod output_component_tests {
     use super::*;
     use crate::entity_generator::VHDLGenerator;
-    use rtlola_frontend::*;
     use std::path::PathBuf;
-    use tera::Tera;
+    use tera::{compile_templates, Tera};
 
-    fn parse(spec: &str) -> Result<RTLolaIR, String> {
-        rtlola_frontend::parse("stdin", spec, crate::CONFIG)
+    fn parse(spec: &str) -> Result<RtLolaMir, String> {
+        rtlola_frontend::parse(&rtlola_frontend::ParserConfig::for_string(spec.to_string()))
+            .map_err(|e| format!("{e:?}"))
     }
 
     #[test]
